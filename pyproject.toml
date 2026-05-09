@@ -1,0 +1,39 @@
+[project]
+name = "dcard-crawler"
+version = "0.1.0"
+description = "A production-style crawler for Dcard trending forum posts"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.25.0",
+    "playwright>=1.40.0",
+    "pydantic>=2.0.0",
+    "sqlalchemy>=2.0.0",
+    "tenacity>=8.2.0",
+    "typer>=0.9.0",
+    "orjson>=3.9.0",
+    "loguru>=0.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+dcard-crawler = "dcard_crawler.cli:app"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

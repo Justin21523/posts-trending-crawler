@@ -1,0 +1,25 @@
+crawler:
+  rate_limit_per_second: 2
+  detail_rate_limit_per_second: 1
+  batch_size: 100
+  batch_rest_interval: 5
+  max_retries: 3
+  retry_backoff_factor: 2
+  popular_mode: false
+
+database:
+  url: "sqlite:///data/dcard_crawler.db"
+
+logging:
+  level: "INFO"
+  file: "logs/crawler.log"
+
+checkpoint:
+  file: "data/checkpoint.json"
+
+endpoints:
+  forum_posts: "/forums/{forum_alias}/posts"
+  post_detail: "/posts/{post_id}"
+  browser_fallback:
+    - "/service/api/v2/forums"
+    - "/service/api/v2/posts"
