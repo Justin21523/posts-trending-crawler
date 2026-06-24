@@ -196,9 +196,11 @@ def test_discover_and_verify_dcard_help_commands_run():
 
     discover_result = runner.invoke(app, ["discover-dcard-endpoints", "--help"])
     verify_result = runner.invoke(app, ["verify-dcard-endpoints", "--help"])
+    serve_result = runner.invoke(app, ["serve-api", "--help"])
 
     assert discover_result.exit_code == 0
     assert verify_result.exit_code == 0
+    assert serve_result.exit_code == 0
 
 
 def test_crawl_ptt_uses_service_factory_without_live_network(tmp_path, monkeypatch):

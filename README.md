@@ -50,6 +50,9 @@ dcard-crawler analyze-excel \
 
 # 7. Run a small live crawler verification
 dcard-crawler verify-live-dcard --forum trending --max-posts 5
+
+# 8. Serve the backend API for the React portfolio UI
+dcard-crawler serve-api --host 127.0.0.1 --port 8000
 ```
 
 ## CLI Commands
@@ -185,6 +188,25 @@ challenges.
 ```bash
 dcard-crawler diagnose-dcard-endpoints --forum trending
 ```
+
+### Backend API
+Serve the FastAPI backend for a local React UI.
+
+```bash
+dcard-crawler serve-api --host 127.0.0.1 --port 8000
+```
+
+Useful endpoints:
+
+- `GET /health`
+- `GET /sources`
+- `GET /posts?platform=ptt&keyword=AI&limit=50`
+- `GET /crawl-jobs`
+- `GET /reports`
+- `POST /verify/dcard`
+- `POST /verify/ptt`
+- `POST /verify/news-rss`
+- `POST /diagnostics/dcard`
 
 ## Architecture
 

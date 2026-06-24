@@ -190,6 +190,24 @@ def init(
     typer.echo(f"✓ Database URL: {settings.database.url}")
 
 
+@app.command("serve-api")
+def serve_api(
+    host: str = typer.Option("127.0.0.1", "--host", help="API bind host"),
+    port: int = typer.Option(8000, "--port", help="API bind port"),
+    reload: bool = typer.Option(False, "--reload", help="Enable uvicorn reload"),
+):
+    """Serve the FastAPI backend for the React portfolio UI."""
+    import uvicorn
+
+    uvicorn.run(
+        "dcard_crawler.api.app:create_app",
+        factory=True,
+        host=host,
+        port=port,
+        reload=reload,
+    )
+
+
 @app.command()
 def discover_endpoints(
     url: str = typer.Option(
