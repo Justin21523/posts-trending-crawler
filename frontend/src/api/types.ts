@@ -227,8 +227,32 @@ export type KeywordNetworkAnalytics = {
     color?: string;
     metadata?: Record<string, unknown>;
     samples?: Array<Record<string, unknown>>;
+    insight_summary?: string;
+    related_post_count?: number;
+    platform_distribution?: Array<{ platform: string; count: number }>;
+    board_distribution?: Array<{ board_or_forum: string; count: number }>;
+    top_related_terms?: Array<{ keyword: string; count: number }>;
+    evidence_posts?: Array<Record<string, unknown>>;
+    cooccurrence_strength?: number;
   }>;
   links: Array<{ source: string; target: string; value: number }>;
+};
+
+export type KeywordInsightsAnalytics = {
+  cards: Array<{
+    keyword: string;
+    title: string;
+    summary: string;
+    related_post_count: number;
+    cooccurrence_strength: number;
+    platform_distribution: Array<{ platform: string; count: number }>;
+    board_distribution: Array<{ board_or_forum: string; count: number }>;
+    top_related_terms: Array<{ keyword: string; count: number }>;
+    evidence_posts: Array<Record<string, unknown>>;
+    category?: string;
+    color?: string;
+  }>;
+  strongest_pairs: Array<{ source: string; target: string; count: number; summary: string }>;
 };
 
 export type KeywordHeatmapAnalytics = {
@@ -256,6 +280,8 @@ export type SourceHealthAnalytics = {
 export type GraphNode = {
   id: string;
   label?: string;
+  label_en?: string;
+  label_zh?: string;
   type?: string;
   count?: number;
   position?: { x: number; y: number };
@@ -267,6 +293,8 @@ export type GraphEdge = {
   source: string;
   target: string;
   label?: string;
+  label_en?: string;
+  label_zh?: string;
   animated?: boolean;
 };
 

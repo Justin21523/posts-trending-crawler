@@ -16,7 +16,6 @@ import {
   useReactTable,
   type ColumnDef,
 } from '@tanstack/react-table';
-import ForceGraph2D from 'react-force-graph-2d';
 import {
   Activity,
   BarChart3,
@@ -80,6 +79,7 @@ import type {
   GraphNode,
   KeywordHeatmapAnalytics,
   KeywordAnalytics,
+  KeywordInsightsAnalytics,
   KeywordNetworkAnalytics,
   LineageAnalytics,
   PlatformAnalytics,
@@ -344,6 +344,7 @@ export function App() {
   const [dashboard, setDashboard] = useState<DashboardAnalytics | null>(null);
   const [timeSeries, setTimeSeries] = useState<TimeSeriesAnalytics | null>(null);
   const [keywordNetwork, setKeywordNetwork] = useState<KeywordNetworkAnalytics | null>(null);
+  const [keywordInsights, setKeywordInsights] = useState<KeywordInsightsAnalytics | null>(null);
   const [keywordHeatmap, setKeywordHeatmap] = useState<KeywordHeatmapAnalytics | null>(null);
   const [sourceHealth, setSourceHealth] = useState<SourceHealthAnalytics | null>(null);
   const [lineage, setLineage] = useState<LineageAnalytics | null>(null);
@@ -396,6 +397,7 @@ export function App() {
       ['dashboard', api.analytics.dashboard()],
       ['timeSeries', api.analytics.timeSeries()],
       ['keywordNetwork', api.analytics.keywordNetwork()],
+      ['keywordInsights', api.analytics.keywordInsights()],
       ['keywordHeatmap', api.analytics.keywordHeatmap()],
       ['sourceHealth', api.analytics.sourceHealth()],
       ['lineage', api.analytics.lineage()],
@@ -432,19 +434,20 @@ export function App() {
       const nextDashboard = value<DashboardAnalytics>(6);
       const nextTimeSeries = value<TimeSeriesAnalytics>(7);
       const nextKeywordNetwork = value<KeywordNetworkAnalytics>(8);
-      const nextKeywordHeatmap = value<KeywordHeatmapAnalytics>(9);
-      const nextSourceHealth = value<SourceHealthAnalytics>(10);
-      const nextLineage = value<LineageAnalytics>(11);
-      const nextCrawlFlow = value<CrawlFlowAnalytics>(12);
-      const nextDataQualityTable = value<DataQualityTableAnalytics>(13);
-      const nextDemoStory = value<DemoStoryAnalytics>(14);
-      const nextComplianceSummary = value<ComplianceSummary>(15);
-      const nextTrends = value<TrendAnalytics>(16);
-      const nextKeywords = value<KeywordAnalytics>(17);
-      const nextEngagement = value<EngagementAnalytics>(18);
-      const nextPlatforms = value<PlatformAnalytics>(19);
-      const nextQuality = value<DataQualityAnalytics>(20);
-      const nextWorkflow = value<WorkflowSummary>(21);
+      const nextKeywordInsights = value<KeywordInsightsAnalytics>(9);
+      const nextKeywordHeatmap = value<KeywordHeatmapAnalytics>(10);
+      const nextSourceHealth = value<SourceHealthAnalytics>(11);
+      const nextLineage = value<LineageAnalytics>(12);
+      const nextCrawlFlow = value<CrawlFlowAnalytics>(13);
+      const nextDataQualityTable = value<DataQualityTableAnalytics>(14);
+      const nextDemoStory = value<DemoStoryAnalytics>(15);
+      const nextComplianceSummary = value<ComplianceSummary>(16);
+      const nextTrends = value<TrendAnalytics>(17);
+      const nextKeywords = value<KeywordAnalytics>(18);
+      const nextEngagement = value<EngagementAnalytics>(19);
+      const nextPlatforms = value<PlatformAnalytics>(20);
+      const nextQuality = value<DataQualityAnalytics>(21);
+      const nextWorkflow = value<WorkflowSummary>(22);
       setSummary(nextSummary);
       setSources(nextSources ?? []);
       setSourceCatalog(nextSourceCatalog ?? []);
@@ -454,6 +457,7 @@ export function App() {
       setDashboard(nextDashboard);
       setTimeSeries(nextTimeSeries);
       setKeywordNetwork(nextKeywordNetwork);
+      setKeywordInsights(nextKeywordInsights);
       setKeywordHeatmap(nextKeywordHeatmap);
       setSourceHealth(nextSourceHealth);
       setLineage(nextLineage);
@@ -763,6 +767,7 @@ export function App() {
           <KeywordPage
             keywords={keywords}
             network={keywordNetwork}
+            insights={keywordInsights}
             heatmap={keywordHeatmap}
             onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
             t={t}
@@ -854,10 +859,24 @@ function DemoAssistant({
   onOpen: () => void;
 }) {
   const { t } = useTranslation();
+  const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   useEffect(() => {
     document.querySelectorAll('.tour-target-active').forEach((item) => item.classList.remove('tour-target-active'));
     if (open) {
-      document.querySelector(`[data-tour="${tourSteps[step].target}"]`)?.classList.add('tour-target-active');
+      const target = document.querySelector(`[data-tour="${tourSteps[step].target}"]`);
+      target?.classList.add('tour-target-active');
+      const updateRect = () => {
+        const rect = target?.getBoundingClientRect();
+        setTargetRect(rect ?? null);
+      };
+      updateRect();
+      window.addEventListener('resize', updateRect);
+      window.addEventListener('scroll', updateRect, true);
+      return () => {
+        window.removeEventListener('resize', updateRect);
+        window.removeEventListener('scroll', updateRect, true);
+        document.querySelectorAll('.tour-target-active').forEach((item) => item.classList.remove('tour-target-active'));
+      };
     }
     return () => {
       document.querySelectorAll('.tour-target-active').forEach((item) => item.classList.remove('tour-target-active'));
@@ -879,7 +898,27 @@ function DemoAssistant({
   const bullets = t(`assistant.steps.${current.i18nKey}Bullets`, { returnObjects: true }) as unknown as string[];
   return (
     <>
-      <div className="tour-highlight" data-active-target={current.target} />
+      <div className="tour-overlay" />
+      {targetRect && (
+        <div
+          className="tour-spotlight"
+          style={{
+            top: targetRect.top - 10,
+            left: targetRect.left - 10,
+            width: targetRect.width + 20,
+            height: targetRect.height + 20,
+          }}
+        />
+      )}
+      {targetRect && (
+        <div
+          className="tour-arrow"
+          style={{
+            top: Math.min(targetRect.bottom + 12, window.innerHeight - 170),
+            left: Math.min(Math.max(targetRect.left + targetRect.width / 2, 80), window.innerWidth - 120),
+          }}
+        />
+      )}
       <aside className="assistant-card">
         <div className="assistant-header">
           <div>
@@ -918,15 +957,18 @@ function DemoAssistant({
 }
 
 function EnhancedFlowNode({ data, selected }: NodeProps) {
+  const { i18n } = useTranslation();
   const payload = data as Record<string, unknown>;
   const status = String(payload.status ?? payload.type ?? 'ready');
+  const label = localizedField(payload, 'label', i18n.language);
+  const purpose = localizedField(payload, 'purpose', i18n.language);
   return (
     <button className={selected ? 'enhanced-node selected' : 'enhanced-node'} type="button">
       <Handle type="target" position={Position.Left} />
       <div className={`node-orbit node-status-${status.replaceAll('_', '-')}`} />
       <div className="node-body">
-        <strong>{String(payload.label ?? 'Node')}</strong>
-        <span>{String(payload.purpose ?? payload.subtitle ?? payload.type ?? 'interactive graph node')}</span>
+        <strong>{label || 'Node'}</strong>
+        <span>{purpose || String(payload.subtitle ?? payload.type ?? 'interactive graph node')}</span>
       </div>
       <b>{String(payload.count ?? payload.value ?? '')}</b>
       <Handle type="source" position={Position.Right} />
@@ -1356,13 +1398,13 @@ function StoryGraphPanel({
   title: string;
   onDrilldown?: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const nodes = (graph?.nodes ?? []).map((node) => ({
     id: node.id,
     type: 'enhanced',
     position: node.position ?? { x: 0, y: 0 },
-    data: { label: node.label ?? node.id, ...node },
+    data: { label: localizedField(node as unknown as Record<string, unknown>, 'label', i18n.language) || node.id, ...node },
     className: `flow-node story-node-${node.type ?? 'default'}`,
   })) as Node[];
   const edges = (graph?.edges ?? []).map((edge, index) => ({ id: edge.id ?? `${edge.source}-${edge.target}-${index}`, ...edge })) as Edge[];
@@ -1406,7 +1448,7 @@ function OverviewDashboard({
   jobs: CrawlJobResponse[];
   onDrilldown: (kind: string, id: string | number, fallback?: Partial<DrilldownResponse>) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const areaData = pivotSeries(dashboard?.daily_platform_volume ?? [], 'platform');
   const platforms = uniqueGroups(dashboard?.daily_platform_volume ?? [], 'platform');
   const ratio = dashboard?.demo_live_ratio ?? { demo: 0, live: 0, total: 0 };
@@ -1630,11 +1672,19 @@ function WorkflowPage({
   crawlFlow: CrawlFlowAnalytics | null;
   onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const nodes = (crawlFlow?.nodes ?? []).map((node) => ({
     ...node,
     type: 'enhanced',
+    data: {
+      ...node.data,
+      label: localizedField((node.data ?? {}) as Record<string, unknown>, 'label', i18n.language),
+      purpose: localizedField((node.data ?? {}) as Record<string, unknown>, 'purpose', i18n.language),
+      inputs: localizedList((node.data ?? {}) as Record<string, unknown>, 'inputs', i18n.language),
+      outputs: localizedList((node.data ?? {}) as Record<string, unknown>, 'outputs', i18n.language),
+      failure_modes: localizedList((node.data ?? {}) as Record<string, unknown>, 'failure_modes', i18n.language),
+    },
     className: `flow-node flow-node-${String(node.data?.status ?? 'unknown').replaceAll('_', '-')}`,
   })) as Node[];
   const edges = (crawlFlow?.edges ?? []) as Edge[];
@@ -1718,17 +1768,19 @@ function TrendPage({
 function KeywordPage({
   keywords,
   network,
+  insights,
   heatmap,
   onDrilldown,
   t,
 }: {
   keywords: KeywordAnalytics | null;
   network: KeywordNetworkAnalytics | null;
+  insights: KeywordInsightsAnalytics | null;
   heatmap: KeywordHeatmapAnalytics | null;
   onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
   t: (key: string) => string;
 }) {
-  const [selectedNode, setSelectedNode] = useState<Record<string, unknown> | null>(null);
+  const [selectedNode, setSelectedNode] = useState<KeywordNetworkAnalytics['nodes'][number] | null>(null);
   const heatmapMax = Math.max(...(heatmap?.cells ?? []).map((cell) => cell.count), 1);
   const phraseColumns: ColumnDef<Record<string, unknown>>[] = [
     { accessorKey: 'keyword', header: String(t('common.keyword')) },
@@ -1751,60 +1803,23 @@ function KeywordPage({
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="panel network-panel" data-tour="keyword-network">
+      <div className="panel wide-panel network-panel" data-tour="keyword-network">
         <div className="panel-header"><h2>{t('keyword.network')}</h2><span className="pill">{t('keyword.groups')}</span></div>
         <div className="network-legend" aria-label={t('network.legend')}>
           {legend.map(([group, color]) => (
             <span key={group}><i style={{ background: color }} />{group}</span>
           ))}
         </div>
-        <ForceGraph2D
-          graphData={{ nodes: network?.nodes ?? [], links: network?.links ?? [] }}
-          nodeLabel="label"
-          nodeVal="value"
-          linkWidth={(link) => Math.max(1, Number(link.value ?? 1) / 6)}
-          nodeColor={(node) => String((node as { color?: string }).color ?? '#2563eb')}
-          nodeCanvasObject={(node, ctx, globalScale) => {
-            const payload = node as { x?: number; y?: number; label?: string; value?: number; color?: string };
-            const x = payload.x ?? 0;
-            const y = payload.y ?? 0;
-            const radius = Math.max(7, Math.sqrt(Number(payload.value ?? 1)) * 2.4);
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
-            ctx.fillStyle = payload.color ?? '#2563eb';
-            ctx.shadowColor = payload.color ?? '#2563eb';
-            ctx.shadowBlur = 10;
-            ctx.fill();
-            ctx.shadowBlur = 0;
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#ffffff';
-            ctx.stroke();
-            const label = payload.label ?? '';
-            const fontSize = Math.max(10, 13 / globalScale);
-            ctx.font = `700 ${fontSize}px Inter, sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.fillStyle = '#0f172a';
-            ctx.fillText(label, x, y + radius + 3);
-          }}
-          nodePointerAreaPaint={(node, color, ctx) => {
-            const payload = node as { x?: number; y?: number; value?: number };
-            const radius = Math.max(10, Math.sqrt(Number(payload.value ?? 1)) * 2.8);
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(payload.x ?? 0, payload.y ?? 0, radius, 0, 2 * Math.PI, false);
-            ctx.fill();
-          }}
+        <KeywordBubbleMap
+          network={network}
+          selectedKeyword={selectedNode?.id}
           onNodeClick={(node) => {
-            const payload = node as Record<string, unknown>;
-            setSelectedNode(payload);
-            onDrilldown('keyword', String(payload.id ?? payload.label ?? 'AI'), {
-              title: String(payload.label ?? payload.id ?? 'Keyword'),
-              metadata: payload,
+            setSelectedNode(node);
+            onDrilldown('keyword', node.id, {
+              title: node.label,
+              metadata: node as unknown as Record<string, unknown>,
             });
           }}
-          width={520}
-          height={320}
         />
       </div>
       <div className="panel wide-panel">
@@ -1833,11 +1848,187 @@ function KeywordPage({
         />
       </div>
       <div className="panel">
-        <div className="panel-header"><h2>{t('keyword.selected')}</h2></div>
-        {selectedNode ? <pre className="json-panel">{JSON.stringify(selectedNode, null, 2)}</pre> : <div className="empty-state">{t('common.clickNode')}</div>}
+        <div className="panel-header"><h2>{t('keyword.insightPanel')}</h2></div>
+        {selectedNode ? (
+          <KeywordInsightPanel node={selectedNode} t={t} />
+        ) : (
+          <KeywordInsightCards insights={insights} t={t} />
+        )}
       </div>
     </section>
   );
+}
+
+function KeywordBubbleMap({
+  network,
+  selectedKeyword,
+  onNodeClick,
+}: {
+  network: KeywordNetworkAnalytics | null;
+  selectedKeyword?: string;
+  onNodeClick: (node: KeywordNetworkAnalytics['nodes'][number]) => void;
+}) {
+  const nodes = (network?.nodes ?? []).slice(0, 18);
+  const links = network?.links ?? [];
+  const width = 900;
+  const height = 480;
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const maxValue = Math.max(...nodes.map((node) => node.value), 1);
+  const positioned = nodes.map((node, index) => {
+    const ring = index < 1 ? 0 : index < 7 ? 1 : 2;
+    const ringIndex = ring === 0 ? 0 : index - (ring === 1 ? 1 : 7);
+    const ringCount = ring === 0 ? 1 : ring === 1 ? 6 : Math.max(nodes.length - 7, 1);
+    const angle = ring === 0 ? 0 : (Math.PI * 2 * ringIndex) / ringCount - Math.PI / 2;
+    const distance = ring === 0 ? 0 : ring === 1 ? 145 : 290;
+    const radius = Math.max(42, Math.min(78, 36 + Math.sqrt(node.value / maxValue) * 46));
+    return {
+      ...node,
+      x: centerX + Math.cos(angle) * distance,
+      y: centerY + Math.sin(angle) * distance,
+      radius,
+    };
+  });
+  const byId = new Map(positioned.map((node) => [node.id, node]));
+
+  return (
+    <svg className="keyword-bubble-map" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Keyword co-occurrence bubble map">
+      <defs>
+        <filter id="bubbleShadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#0f172a" floodOpacity="0.18" />
+        </filter>
+      </defs>
+      <g className="bubble-links">
+        {links.slice(0, 40).map((link) => {
+          const source = byId.get(String(link.source));
+          const target = byId.get(String(link.target));
+          if (!source || !target) return null;
+          return (
+            <line
+              key={`${link.source}-${link.target}`}
+              x1={source.x}
+              y1={source.y}
+              x2={target.x}
+              y2={target.y}
+              strokeWidth={Math.max(1, Math.min(7, link.value))}
+            />
+          );
+        })}
+      </g>
+      <g className="bubble-nodes">
+        {positioned.map((node) => {
+          const lines = wrapBubbleLabel(node.label, node.radius);
+          const selected = selectedKeyword === node.id;
+          return (
+            <g
+              className={selected ? 'keyword-bubble selected' : 'keyword-bubble'}
+              key={node.id}
+              role="button"
+              tabIndex={0}
+              transform={`translate(${node.x} ${node.y})`}
+              onClick={() => onNodeClick(node)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') onNodeClick(node);
+              }}
+            >
+              <circle r={node.radius} fill={node.color ?? '#2563eb'} />
+              <circle className="bubble-ring" r={node.radius + 4} />
+              <text textAnchor="middle" dominantBaseline="middle">
+                {lines.map((line, index) => (
+                  <tspan
+                    x="0"
+                    dy={index === 0 ? `${-(lines.length - 1) * 9}` : '18'}
+                    key={line}
+                  >
+                    {line}
+                  </tspan>
+                ))}
+              </text>
+              <text className="bubble-count" textAnchor="middle" y={node.radius - 14}>{node.value}</text>
+            </g>
+          );
+        })}
+      </g>
+    </svg>
+  );
+}
+
+function KeywordInsightPanel({
+  node,
+  t,
+}: {
+  node: KeywordNetworkAnalytics['nodes'][number];
+  t: (key: string) => string;
+}) {
+  return (
+    <div className="keyword-insight-panel">
+      <p>{node.insight_summary ?? '-'}</p>
+      <div className="metadata-list">
+        <div className="metadata-row"><strong>{t('keyword.relatedPosts')}</strong><span>{node.related_post_count ?? node.value}</span></div>
+        <div className="metadata-row"><strong>{t('keyword.cooccurrenceStrength')}</strong><span>{node.cooccurrence_strength ?? 0}</span></div>
+      </div>
+      <MiniDistribution title={t('keyword.relatedTerms')} rows={(node.top_related_terms ?? []).map((item) => [item.keyword, item.count])} />
+      <MiniDistribution title={t('keyword.platformDistribution')} rows={(node.platform_distribution ?? []).map((item) => [item.platform, item.count])} />
+      <MiniDistribution title={t('keyword.boardDistribution')} rows={(node.board_distribution ?? []).map((item) => [item.board_or_forum, item.count])} />
+      <div className="detail-section">
+        <strong>{t('keyword.evidencePosts')}</strong>
+        <div className="evidence-list">
+          {(node.evidence_posts ?? node.samples ?? []).slice(0, 4).map((post) => (
+            <span key={String(post.post_id ?? post.title)}>{String(post.title ?? '-')}</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KeywordInsightCards({
+  insights,
+  t,
+}: {
+  insights: KeywordInsightsAnalytics | null;
+  t: (key: string) => string;
+}) {
+  return (
+    <div className="keyword-insight-cards">
+      {(insights?.cards ?? []).slice(0, 4).map((card) => (
+        <div className="highlight-card insight-card" key={card.keyword}>
+          <i style={{ background: card.color ?? '#64748b' }} />
+          <div>
+            <strong>{card.title}</strong>
+            <span>{card.summary}</span>
+          </div>
+        </div>
+      ))}
+      {!insights?.cards?.length && <div className="empty-state">{t('common.noData')}</div>}
+    </div>
+  );
+}
+
+function MiniDistribution({ title, rows }: { title: string; rows: Array<[string, number]> }) {
+  const max = Math.max(...rows.map(([, count]) => count), 1);
+  return (
+    <div className="mini-distribution">
+      <strong>{title}</strong>
+      {rows.length ? rows.slice(0, 5).map(([label, count]) => (
+        <div className="mini-bar" key={label}>
+          <span>{label}</span>
+          <b style={{ width: `${Math.max(8, (count / max) * 100)}%` }} />
+          <em>{count}</em>
+        </div>
+      )) : <small>-</small>}
+    </div>
+  );
+}
+
+function wrapBubbleLabel(label: string, radius: number): string[] {
+  const maxChars = radius > 64 ? 7 : 5;
+  if (label.length <= maxChars) return [label];
+  const chunks: string[] = [];
+  for (let index = 0; index < label.length; index += maxChars) {
+    chunks.push(label.slice(index, index + maxChars));
+  }
+  return chunks.slice(0, 3);
 }
 
 function EngagementPage({
@@ -1991,14 +2182,17 @@ function QualityPage({
   table: DataQualityTableAnalytics | null;
   onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [activeTable, setActiveTable] = useState<keyof DataQualityTableAnalytics>('missing_content');
   const lineageNodes = (lineage?.nodes ?? []).map((node, index) => ({
     id: node.id,
     type: 'enhanced',
     position: { x: index * 190, y: index % 2 ? 140 : 20 },
-    data: { label: `${node.label ?? node.id} (${node.count ?? 0})`, ...node },
+    data: {
+      label: `${localizedField(node as unknown as Record<string, unknown>, 'label', i18n.language) || node.id} (${node.count ?? 0})`,
+      ...node,
+    },
     className: `flow-node lineage-node-${node.type ?? 'default'}`,
   })) as Node[];
   const lineageEdges = (lineage?.edges ?? []).map((edge, index) => ({ id: edge.id ?? `edge-${index}`, ...edge })) as Edge[];
@@ -2265,14 +2459,24 @@ function DataTable({
 }
 
 function NodeDetailPanel({ node, title }: { node: GraphNode | null; title: string }) {
-  const { t } = useTranslation();
-  const payload = node?.data ?? node ?? {};
+  const { t, i18n } = useTranslation();
+  const payload = (node?.data ?? node ?? {}) as Record<string, unknown>;
+  const displayPayload = Object.fromEntries(
+    Object.entries({
+      ...payload,
+      label: localizedField(payload, 'label', i18n.language) || payload.label,
+      purpose: localizedField(payload, 'purpose', i18n.language) || payload.purpose,
+      inputs: localizedList(payload, 'inputs', i18n.language) ?? payload.inputs,
+      outputs: localizedList(payload, 'outputs', i18n.language) ?? payload.outputs,
+      failure_modes: localizedList(payload, 'failure_modes', i18n.language) ?? payload.failure_modes,
+    }).filter(([key]) => !key.endsWith('_zh') && !key.endsWith('_en')),
+  );
   return (
     <aside className="panel node-detail-panel">
       <div className="panel-header"><h2>{title}</h2></div>
       {node ? (
         <div className="metadata-list">
-          {Object.entries(payload).map(([key, value]) => (
+          {Object.entries(displayPayload).map(([key, value]) => (
             <div className="metadata-row" key={key}>
               <strong>{key}</strong>
               <span>{formatValue(value)}</span>
@@ -2389,4 +2593,14 @@ function formatValue(value: unknown): string {
     return JSON.stringify(value);
   }
   return String(value);
+}
+
+function localizedField(payload: Record<string, unknown>, field: string, language: string): string {
+  const suffix = language === 'zh' ? 'zh' : 'en';
+  return String(payload[`${field}_${suffix}`] ?? payload[field] ?? '');
+}
+
+function localizedList(payload: Record<string, unknown>, field: string, language: string): unknown {
+  const suffix = language === 'zh' ? 'zh' : 'en';
+  return payload[`${field}_${suffix}`] ?? payload[field];
 }

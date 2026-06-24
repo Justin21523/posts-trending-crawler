@@ -45,7 +45,9 @@ export function JobsTimeline({ jobs, onSelectJob }: JobsTimelineProps) {
               <button className="job-row interactive-row" type="button" key={job.id} onClick={() => onSelectJob?.(job)}>
                 <div>
                   <div className="job-title">#{job.id} {job.source}</div>
-                  <div className="job-meta">{job.job_type} · requests {job.request_count} · items {job.item_count}</div>
+                  <div className="job-meta">
+                    {job.job_type} · {t('common.requests')} {job.request_count} · {t('common.items')} {job.item_count}
+                  </div>
                   {job.error_reason ? <div className="job-error">{job.error_reason}</div> : null}
                 </div>
                 <StatusBadge value={job.status} />

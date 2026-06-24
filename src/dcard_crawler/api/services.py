@@ -557,21 +557,44 @@ class APIQueryService:
         keyword_counts: Counter[str] = Counter()
         link_counts: Counter[tuple[str, str]] = Counter()
         samples: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        platforms: dict[str, Counter[str]] = defaultdict(Counter)
+        boards: dict[str, Counter[str]] = defaultdict(Counter)
+        related_terms: dict[str, Counter[str]] = defaultdict(Counter)
         with get_session() as session:
             rows = session.execute(
-                select(Post.id, Post.platform, Post.title, Post.excerpt, Post.content)
+                select(
+                    Post.id,
+                    Post.platform,
+                    Post.board_or_forum,
+                    Post.title,
+                    Post.excerpt,
+                    Post.content,
+                )
             ).all()
-        for post_id, platform, title, excerpt, content in rows:
+        for post_id, platform, board, title, excerpt, content in rows:
             text = normalize_text(" ".join([title or "", excerpt or "", content or ""]))
             matched = sorted({kw for kw in DEMO_KEYWORDS if normalize_text(kw) in text})
             for keyword in matched:
                 keyword_counts[keyword] += 1
+                platforms[keyword][platform or "unknown"] += 1
+                boards[keyword][board or "unknown"] += 1
                 if len(samples[keyword]) < 5:
                     samples[keyword].append(
-                        {"post_id": post_id, "platform": platform, "title": title}
+                        {
+                            "post_id": post_id,
+                            "platform": platform,
+                            "board_or_forum": board,
+                            "title": title,
+                        }
                     )
             for left, right in combinations(matched, 2):
                 link_counts[(left, right)] += 1
+                related_terms[left][right] += 1
+                related_terms[right][left] += 1
+        strengths: Counter[str] = Counter()
+        for (left, right), count in link_counts.items():
+            strengths[left] += count
+            strengths[right] += count
         return {
             "nodes": [
                 {
@@ -579,11 +602,34 @@ class APIQueryService:
                     "label": keyword,
                     "value": count,
                     "samples": samples[keyword],
+                    "insight_summary": self._keyword_insight_summary(
+                        keyword,
+                        count,
+                        platforms[keyword],
+                        boards[keyword],
+                        related_terms[keyword],
+                    ),
+                    "related_post_count": count,
+                    "platform_distribution": [
+                        {"platform": name, "count": value}
+                        for name, value in platforms[keyword].most_common(8)
+                    ],
+                    "board_distribution": [
+                        {"board_or_forum": name, "count": value}
+                        for name, value in boards[keyword].most_common(8)
+                    ],
+                    "top_related_terms": [
+                        {"keyword": name, "count": value}
+                        for name, value in related_terms[keyword].most_common(8)
+                    ],
+                    "evidence_posts": samples[keyword],
+                    "cooccurrence_strength": int(strengths[keyword]),
                     **self._keyword_category(keyword),
                     "metadata": {
                         "keyword": keyword,
                         "match_count": count,
                         "sample_count": len(samples[keyword]),
+                        "cooccurrence_strength": int(strengths[keyword]),
                     },
                 }
                 for keyword, count in keyword_counts.most_common(30)
@@ -591,6 +637,42 @@ class APIQueryService:
             "links": [
                 {"source": left, "target": right, "value": count}
                 for (left, right), count in link_counts.most_common(60)
+            ],
+        }
+
+    def analytics_keyword_insights(self) -> dict[str, Any]:
+        """Return Insight Retrieval cards built from keyword co-occurrence data."""
+        network = self.analytics_keyword_network()
+        nodes = network["nodes"]
+        links = network["links"]
+        return {
+            "cards": [
+                {
+                    "keyword": node["id"],
+                    "title": node["label"],
+                    "summary": node["insight_summary"],
+                    "related_post_count": node["related_post_count"],
+                    "cooccurrence_strength": node["cooccurrence_strength"],
+                    "platform_distribution": node["platform_distribution"],
+                    "board_distribution": node["board_distribution"],
+                    "top_related_terms": node["top_related_terms"],
+                    "evidence_posts": node["evidence_posts"],
+                    "category": node.get("category"),
+                    "color": node.get("color"),
+                }
+                for node in nodes[:12]
+            ],
+            "strongest_pairs": [
+                {
+                    "source": link["source"],
+                    "target": link["target"],
+                    "count": link["value"],
+                    "summary": (
+                        f"{link['source']} 與 {link['target']} "
+                        f"在 {link['value']} 筆內容中共同出現。"
+                    ),
+                }
+                for link in links[:15]
             ],
         }
 
@@ -627,9 +709,7 @@ class APIQueryService:
                 {"status": status, "count": int(count)} for status, count in status_rows
             ],
             "source_health": source_health["rows"],
-            "latest_diagnostics": [
-                self._job_dict(job, source_name) for job, source_name in recent
-            ],
+            "latest_diagnostics": [self._job_dict(job, source_name) for job, source_name in recent],
             "governance_rules": [
                 "Public data only",
                 "robots.txt checked before fetch",
@@ -697,12 +777,48 @@ class APIQueryService:
     def analytics_lineage(self) -> dict[str, Any]:
         """Return a compact lineage graph."""
         nodes = [
-            {"id": "sources", "label": "Sources", "type": "source"},
-            {"id": "crawl_jobs", "label": "Crawl Jobs", "type": "job"},
-            {"id": "raw_records", "label": "Raw Records", "type": "raw"},
-            {"id": "posts", "label": "Normalized Posts", "type": "post"},
-            {"id": "keyword_matches", "label": "Keyword Matches", "type": "analysis"},
-            {"id": "reports", "label": "Reports", "type": "report"},
+            {
+                "id": "sources",
+                "label": "Sources",
+                "label_en": "Sources",
+                "label_zh": "資料來源",
+                "type": "source",
+            },
+            {
+                "id": "crawl_jobs",
+                "label": "Crawl Jobs",
+                "label_en": "Crawl Jobs",
+                "label_zh": "爬取任務",
+                "type": "job",
+            },
+            {
+                "id": "raw_records",
+                "label": "Raw Records",
+                "label_en": "Raw Records",
+                "label_zh": "原始資料",
+                "type": "raw",
+            },
+            {
+                "id": "posts",
+                "label": "Normalized Posts",
+                "label_en": "Normalized Posts",
+                "label_zh": "標準化文章",
+                "type": "post",
+            },
+            {
+                "id": "keyword_matches",
+                "label": "Keyword Matches",
+                "label_en": "Keyword Matches",
+                "label_zh": "關鍵字命中",
+                "type": "analysis",
+            },
+            {
+                "id": "reports",
+                "label": "Reports",
+                "label_en": "Reports",
+                "label_zh": "報表",
+                "type": "report",
+            },
         ]
         counts = self.counts()
         nodes[0]["count"] = counts["sources"]
@@ -714,11 +830,41 @@ class APIQueryService:
         return {
             "nodes": nodes,
             "edges": [
-                {"source": "sources", "target": "crawl_jobs", "label": "starts"},
-                {"source": "crawl_jobs", "target": "raw_records", "label": "fetches"},
-                {"source": "raw_records", "target": "posts", "label": "normalizes"},
-                {"source": "posts", "target": "keyword_matches", "label": "analyzes"},
-                {"source": "keyword_matches", "target": "reports", "label": "exports"},
+                {
+                    "source": "sources",
+                    "target": "crawl_jobs",
+                    "label": "starts",
+                    "label_en": "starts",
+                    "label_zh": "啟動",
+                },
+                {
+                    "source": "crawl_jobs",
+                    "target": "raw_records",
+                    "label": "fetches",
+                    "label_en": "fetches",
+                    "label_zh": "抓取",
+                },
+                {
+                    "source": "raw_records",
+                    "target": "posts",
+                    "label": "normalizes",
+                    "label_en": "normalizes",
+                    "label_zh": "標準化",
+                },
+                {
+                    "source": "posts",
+                    "target": "keyword_matches",
+                    "label": "analyzes",
+                    "label_en": "analyzes",
+                    "label_zh": "分析",
+                },
+                {
+                    "source": "keyword_matches",
+                    "target": "reports",
+                    "label": "exports",
+                    "label_en": "exports",
+                    "label_zh": "匯出",
+                },
             ],
         }
 
@@ -736,13 +882,23 @@ class APIQueryService:
                     "position": {"x": (index % 4) * x_gap, "y": (index // 4) * 150},
                     "data": {
                         "label": stage["label"],
+                        "label_en": stage["label_en"],
+                        "label_zh": stage["label_zh"],
                         "status": stage["status"],
                         "count": stage["count"],
                         "purpose": detail["purpose"],
+                        "purpose_en": detail["purpose_en"],
+                        "purpose_zh": detail["purpose_zh"],
                         "inputs": detail["inputs"],
+                        "inputs_en": detail["inputs_en"],
+                        "inputs_zh": detail["inputs_zh"],
                         "outputs": detail["outputs"],
+                        "outputs_en": detail["outputs_en"],
+                        "outputs_zh": detail["outputs_zh"],
                         "tables": detail["tables"],
                         "failure_modes": detail["failure_modes"],
+                        "failure_modes_en": detail["failure_modes_en"],
+                        "failure_modes_zh": detail["failure_modes_zh"],
                         "compliance": detail["compliance"],
                         "request_count": self.counts()["crawl_jobs"] if index < 4 else 0,
                         "item_count": stage["count"],
@@ -776,14 +932,24 @@ class APIQueryService:
                     "index": index,
                     "key": stage["key"],
                     "label": stage["label"],
+                    "label_en": stage["label_en"],
+                    "label_zh": stage["label_zh"],
                     "status": stage["status"],
                     "count": stage["count"],
                     "purpose": detail["purpose"],
+                    "purpose_en": detail["purpose_en"],
+                    "purpose_zh": detail["purpose_zh"],
                     "inputs": detail["inputs"],
+                    "inputs_en": detail["inputs_en"],
+                    "inputs_zh": detail["inputs_zh"],
                     "outputs": detail["outputs"],
+                    "outputs_en": detail["outputs_en"],
+                    "outputs_zh": detail["outputs_zh"],
                     "tables": detail["tables"],
                     "artifact": detail["artifact"],
                     "failure_modes": detail["failure_modes"],
+                    "failure_modes_en": detail["failure_modes_en"],
+                    "failure_modes_zh": detail["failure_modes_zh"],
                     "compliance": detail["compliance"],
                     "engineering_highlight": detail["engineering_highlight"],
                 }
@@ -1065,48 +1231,93 @@ class APIQueryService:
             None,
         )
         stages = [
-            ("source_select", "Source Select", "completed", overview["kpis"]["total_sources"]),
+            (
+                "source_select",
+                "Source Select",
+                "選擇資料來源",
+                "completed",
+                overview["kpis"]["total_sources"],
+            ),
             (
                 "policy_check",
                 "Policy Check",
+                "Policy 檢查",
                 "completed_with_warnings",
                 len(quality["policy_events"]),
             ),
-            ("robots_check", "Robots Check", "completed_with_warnings", 1),
-            ("request_budget", "Request Budget", "completed", overview["kpis"]["total_crawl_runs"]),
+            ("robots_check", "Robots Check", "robots.txt 檢查", "completed_with_warnings", 1),
+            (
+                "request_budget",
+                "Request Budget",
+                "請求預算",
+                "completed",
+                overview["kpis"]["total_crawl_runs"],
+            ),
             (
                 "fetch_listing",
                 "Fetch Listing",
+                "抓取列表",
                 "completed",
                 overview["kpis"]["successful_crawl_runs"],
             ),
             (
                 "fetch_detail",
                 "Fetch Detail",
+                "抓取詳細頁",
                 "completed_with_warnings",
                 overview["kpis"]["failed_crawl_runs"],
             ),
-            ("parse", "Parse HTML / JSON", "completed", overview["kpis"]["total_posts"]),
-            ("normalize", "Normalize Schema", "completed", overview["kpis"]["total_posts"]),
-            ("validate", "Validate Data", "completed_with_warnings", quality["checks"][1]["count"]),
-            ("deduplicate", "Deduplicate", "completed", quality["checks"][2]["count"]),
-            ("store", "Store SQLite", "completed", overview["kpis"]["total_posts"]),
-            ("analyze_export", "Analyze / Export", "completed", len(self.list_reports())),
+            (
+                "parse",
+                "Parse HTML / JSON",
+                "解析 HTML / JSON",
+                "completed",
+                overview["kpis"]["total_posts"],
+            ),
+            (
+                "normalize",
+                "Normalize Schema",
+                "標準化 Schema",
+                "completed",
+                overview["kpis"]["total_posts"],
+            ),
+            (
+                "validate",
+                "Validate Data",
+                "驗證資料品質",
+                "completed_with_warnings",
+                quality["checks"][1]["count"],
+            ),
+            ("deduplicate", "Deduplicate", "去重複", "completed", quality["checks"][2]["count"]),
+            ("store", "Store SQLite", "寫入 SQLite", "completed", overview["kpis"]["total_posts"]),
+            (
+                "analyze_export",
+                "Analyze / Export",
+                "分析與匯出",
+                "completed",
+                len(self.list_reports()),
+            ),
         ]
         return {
             "demo_dataset_present": overview["demo_dataset_present"],
             "latest_error": latest_error,
             "stages": [
-                {
-                    "key": key,
-                    "label": label,
-                    "status": status,
-                    "count": count,
-                    "error_reason": latest_error.get("error_reason")
-                    if latest_error and key == "policy_check"
-                    else None,
-                }
-                for key, label, status, count in stages
+                self._localize_payload(
+                    {
+                        "key": key,
+                        "label": label,
+                        "label_en": label,
+                        "label_zh": label_zh,
+                        "status": status,
+                        "count": count,
+                        "error_reason": latest_error.get("error_reason")
+                        if latest_error and key == "policy_check"
+                        else None,
+                    },
+                    label_en=label,
+                    label_zh=label_zh,
+                )
+                for key, label, label_zh, status, count in stages
             ],
         }
 
@@ -1247,7 +1458,100 @@ class APIQueryService:
                 "engineering_highlight": "The crawler feeds analysis, not just raw collection.",
             },
         }
-        return details[key]
+        localized = {
+            "source_select": {
+                "purpose_zh": "在任何網路請求前，先選擇公開且已登錄的資料來源。",
+                "inputs_zh": ["configs/sources.yaml", "sources 資料表", "啟用來源篩選"],
+                "outputs_zh": ["connector 目標", "source_id", "crawl job 意圖"],
+                "failure_modes_zh": ["來源停用", "catalog 缺少設定", "connector 尚未支援"],
+            },
+            "policy_check": {
+                "purpose_zh": "評估平台政策、停止條件、請求預算與來源健康狀態。",
+                "inputs_zh": ["crawler policy 設定", "source metadata", "近期 crawl jobs"],
+                "outputs_zh": ["允許 / 降速 / fail-closed 決策", "error_category"],
+                "failure_modes_zh": [
+                    "http_403_forbidden",
+                    "http_429_rate_limited",
+                    "captcha_detected",
+                    "login_required",
+                ],
+            },
+            "robots_check": {
+                "purpose_zh": "在抓取公開頁面前檢查 robots.txt 與 domain 規則。",
+                "inputs_zh": ["robots_url", "target_url", "user agent policy"],
+                "outputs_zh": ["robots 允許 / 禁止 / 無法取得狀態"],
+                "failure_modes_zh": ["robots_disallowed", "robots_unavailable"],
+            },
+            "request_budget": {
+                "purpose_zh": "限制每次 job 的請求量，並在 rate limit 後讓 domain cooldown。",
+                "inputs_zh": ["request_budget_per_job", "per-domain rate limiter", "cooldown 設定"],
+                "outputs_zh": ["剩餘預算", "cooldown 狀態", "request_count"],
+                "failure_modes_zh": ["request_budget_exceeded", "domain_cooldown_active"],
+            },
+            "fetch_listing": {
+                "purpose_zh": "透過 connector 抓取列表、RSS、sitemap 或 API index 資料。",
+                "inputs_zh": ["connector target", "http client", "rate limiter"],
+                "outputs_zh": ["raw listing payload", "候選 item URLs/IDs"],
+                "failure_modes_zh": ["empty listing", "parser mismatch", "network timeout"],
+            },
+            "fetch_detail": {
+                "purpose_zh": "抓取已選項目的公開詳細頁或 API detail payload。",
+                "inputs_zh": ["candidate items", "max_posts", "checkpoint state"],
+                "outputs_zh": ["raw detail JSON/HTML", "detail fetch provenance"],
+                "failure_modes_zh": ["detail blocked", "not found", "login wall"],
+            },
+            "parse": {
+                "purpose_zh": "將 JSON、RSS XML 或 HTML 解析成中介資料記錄。",
+                "inputs_zh": ["raw payload", "connector parser", "html/text utilities"],
+                "outputs_zh": ["已解析 title/content/metadata 欄位"],
+                "failure_modes_zh": ["missing title", "missing content", "invalid date"],
+            },
+            "normalize": {
+                "purpose_zh": "將各平台資料轉成共用的 NormalizedPost schema。",
+                "inputs_zh": ["parsed item", "source_id", "platform metadata"],
+                "outputs_zh": ["NormalizedPost", "content_hash", "canonical fields"],
+                "failure_modes_zh": [
+                    "invalid schema",
+                    "missing external_id",
+                    "unsupported platform field",
+                ],
+            },
+            "validate": {
+                "purpose_zh": "檢查完整性、時間欄位、內容長度與品質旗標。",
+                "inputs_zh": ["NormalizedPost", "quality rules"],
+                "outputs_zh": ["quality counters", "warnings", "accepted/skipped decision"],
+                "failure_modes_zh": ["empty content", "invalid date", "malformed URL"],
+            },
+            "deduplicate": {
+                "purpose_zh": "使用 source/external ID 與 content hash 避免重複資料。",
+                "inputs_zh": ["source_id", "external_id", "content_hash"],
+                "outputs_zh": ["insert/update decision", "duplicate counters"],
+                "failure_modes_zh": ["duplicate hash", "conflicting external_id"],
+            },
+            "store": {
+                "purpose_zh": "保存 sources、jobs、normalized posts、metrics 與 report metadata。",
+                "inputs_zh": ["NormalizedPost", "crawl job lifecycle", "metrics"],
+                "outputs_zh": ["SQLite rows", "queryable analytics dataset"],
+                "failure_modes_zh": ["schema mismatch", "database write error"],
+            },
+            "analyze_export": {
+                "purpose_zh": "彙整趨勢、關鍵字、互動、健康狀態與 Excel sheets。",
+                "inputs_zh": ["SQLite posts", "crawl jobs", "keyword dictionary"],
+                "outputs_zh": ["charts", "analytics API payloads", "Excel/CSV/JSON reports"],
+                "failure_modes_zh": ["empty dataset", "missing metrics", "export path unavailable"],
+            },
+        }
+        detail = details[key]
+        local = localized.get(key, {})
+        detail["purpose_en"] = detail["purpose"]
+        detail["purpose_zh"] = local.get("purpose_zh", detail["purpose"])
+        detail["inputs_en"] = detail["inputs"]
+        detail["inputs_zh"] = local.get("inputs_zh", detail["inputs"])
+        detail["outputs_en"] = detail["outputs"]
+        detail["outputs_zh"] = local.get("outputs_zh", detail["outputs"])
+        detail["failure_modes_en"] = detail["failure_modes"]
+        detail["failure_modes_zh"] = local.get("failure_modes_zh", detail["failure_modes"])
+        return detail
 
     @staticmethod
     def _architecture_graph() -> dict[str, Any]:
@@ -1255,105 +1559,216 @@ class APIQueryService:
             {
                 "id": "sources",
                 "label": "Public Sources",
+                "label_en": "Public Sources",
+                "label_zh": "公開資料來源",
                 "type": "source",
                 "position": {"x": 0, "y": 80},
             },
             {
                 "id": "connectors",
                 "label": "Connectors",
+                "label_en": "Connectors",
+                "label_zh": "平台 Connectors",
                 "type": "connector",
                 "position": {"x": 220, "y": 80},
             },
             {
                 "id": "core",
                 "label": "Crawler Core",
+                "label_en": "Crawler Core",
+                "label_zh": "Crawler 核心",
                 "type": "core",
                 "position": {"x": 440, "y": 80},
             },
             {
                 "id": "sqlite",
                 "label": "SQLite Store",
+                "label_en": "SQLite Store",
+                "label_zh": "SQLite 儲存層",
                 "type": "database",
                 "position": {"x": 660, "y": 80},
             },
             {
                 "id": "analytics",
                 "label": "Analytics API",
+                "label_en": "Analytics API",
+                "label_zh": "Analytics API",
                 "type": "api",
                 "position": {"x": 880, "y": 20},
             },
             {
                 "id": "react",
                 "label": "React Dashboard",
+                "label_en": "React Dashboard",
+                "label_zh": "React 儀表板",
                 "type": "ui",
                 "position": {"x": 1100, "y": 20},
             },
             {
                 "id": "excel",
                 "label": "Excel Export",
+                "label_en": "Excel Export",
+                "label_zh": "Excel 匯出",
                 "type": "export",
                 "position": {"x": 1100, "y": 150},
             },
         ]
         edges = [
-            {"source": "sources", "target": "connectors", "label": "select target"},
-            {"source": "connectors", "target": "core", "label": "fetch/parse contract"},
-            {"source": "core", "target": "sqlite", "label": "normalize/store"},
-            {"source": "sqlite", "target": "analytics", "label": "query"},
-            {"source": "analytics", "target": "react", "label": "visualize"},
-            {"source": "sqlite", "target": "excel", "label": "export"},
+            {
+                "source": "sources",
+                "target": "connectors",
+                "label": "select target",
+                "label_en": "select target",
+                "label_zh": "選擇目標",
+            },
+            {
+                "source": "connectors",
+                "target": "core",
+                "label": "fetch/parse contract",
+                "label_en": "fetch/parse contract",
+                "label_zh": "抓取/解析契約",
+            },
+            {
+                "source": "core",
+                "target": "sqlite",
+                "label": "normalize/store",
+                "label_en": "normalize/store",
+                "label_zh": "標準化/儲存",
+            },
+            {
+                "source": "sqlite",
+                "target": "analytics",
+                "label": "query",
+                "label_en": "query",
+                "label_zh": "查詢",
+            },
+            {
+                "source": "analytics",
+                "target": "react",
+                "label": "visualize",
+                "label_en": "visualize",
+                "label_zh": "視覺化",
+            },
+            {
+                "source": "sqlite",
+                "target": "excel",
+                "label": "export",
+                "label_en": "export",
+                "label_zh": "匯出",
+            },
         ]
         return {"nodes": nodes, "edges": edges}
 
     @staticmethod
     def _lifecycle_graph() -> dict[str, Any]:
         nodes = [
-            {"id": "raw", "label": "Raw Response", "type": "raw", "position": {"x": 0, "y": 80}},
+            {
+                "id": "raw",
+                "label": "Raw Response",
+                "label_en": "Raw Response",
+                "label_zh": "原始回應",
+                "type": "raw",
+                "position": {"x": 0, "y": 80},
+            },
             {
                 "id": "parsed",
                 "label": "Parsed Item",
+                "label_en": "Parsed Item",
+                "label_zh": "解析後項目",
                 "type": "parse",
                 "position": {"x": 190, "y": 80},
             },
             {
                 "id": "post",
                 "label": "Normalized Post",
+                "label_en": "Normalized Post",
+                "label_zh": "標準化文章",
                 "type": "post",
                 "position": {"x": 380, "y": 80},
             },
             {
                 "id": "hash",
                 "label": "Dedupe Hash",
+                "label_en": "Dedupe Hash",
+                "label_zh": "去重 Hash",
                 "type": "quality",
                 "position": {"x": 570, "y": 20},
             },
             {
                 "id": "keyword",
                 "label": "Keyword Match",
+                "label_en": "Keyword Match",
+                "label_zh": "關鍵字命中",
                 "type": "analysis",
                 "position": {"x": 570, "y": 140},
             },
             {
                 "id": "chart",
                 "label": "Analytics Chart",
+                "label_en": "Analytics Chart",
+                "label_zh": "分析圖表",
                 "type": "analysis",
                 "position": {"x": 760, "y": 80},
             },
             {
                 "id": "excel",
                 "label": "Excel Sheet",
+                "label_en": "Excel Sheet",
+                "label_zh": "Excel 工作表",
                 "type": "export",
                 "position": {"x": 950, "y": 80},
             },
         ]
         edges = [
-            {"source": "raw", "target": "parsed", "label": "parse"},
-            {"source": "parsed", "target": "post", "label": "normalize"},
-            {"source": "post", "target": "hash", "label": "dedupe"},
-            {"source": "post", "target": "keyword", "label": "analyze text"},
-            {"source": "keyword", "target": "chart", "label": "aggregate"},
-            {"source": "hash", "target": "chart", "label": "quality flags"},
-            {"source": "chart", "target": "excel", "label": "export"},
+            {
+                "source": "raw",
+                "target": "parsed",
+                "label": "parse",
+                "label_en": "parse",
+                "label_zh": "解析",
+            },
+            {
+                "source": "parsed",
+                "target": "post",
+                "label": "normalize",
+                "label_en": "normalize",
+                "label_zh": "標準化",
+            },
+            {
+                "source": "post",
+                "target": "hash",
+                "label": "dedupe",
+                "label_en": "dedupe",
+                "label_zh": "去重",
+            },
+            {
+                "source": "post",
+                "target": "keyword",
+                "label": "analyze text",
+                "label_en": "analyze text",
+                "label_zh": "文字分析",
+            },
+            {
+                "source": "keyword",
+                "target": "chart",
+                "label": "aggregate",
+                "label_en": "aggregate",
+                "label_zh": "彙整",
+            },
+            {
+                "source": "hash",
+                "target": "chart",
+                "label": "quality flags",
+                "label_en": "quality flags",
+                "label_zh": "品質旗標",
+            },
+            {
+                "source": "chart",
+                "target": "excel",
+                "label": "export",
+                "label_en": "export",
+                "label_zh": "匯出",
+            },
         ]
         return {"nodes": nodes, "edges": edges}
 
@@ -1518,6 +1933,43 @@ class APIQueryService:
             "quality_flags": ["not_found"],
             "raw_payload": {},
         }
+
+    @staticmethod
+    def _localize_payload(
+        payload: dict[str, Any],
+        *,
+        label_en: str | None = None,
+        label_zh: str | None = None,
+        purpose_en: str | None = None,
+        purpose_zh: str | None = None,
+    ) -> dict[str, Any]:
+        if label_en is not None:
+            payload["label_en"] = label_en
+            payload.setdefault("label", label_en)
+        if label_zh is not None:
+            payload["label_zh"] = label_zh
+        if purpose_en is not None:
+            payload["purpose_en"] = purpose_en
+            payload.setdefault("purpose", purpose_en)
+        if purpose_zh is not None:
+            payload["purpose_zh"] = purpose_zh
+        return payload
+
+    @staticmethod
+    def _keyword_insight_summary(
+        keyword: str,
+        count: int,
+        platforms: Counter[str],
+        boards: Counter[str],
+        related_terms: Counter[str],
+    ) -> str:
+        top_platform = platforms.most_common(1)[0][0] if platforms else "unknown"
+        top_board = boards.most_common(1)[0][0] if boards else "unknown"
+        top_terms = "、".join(term for term, _ in related_terms.most_common(3)) or "尚無明顯共現詞"
+        return (
+            f"{keyword} 出現在 {count} 筆內容中，主要集中在 {top_platform} / {top_board}，"
+            f"常與 {top_terms} 共同出現。"
+        )
 
     @staticmethod
     def _keyword_category(keyword: str) -> dict[str, str]:

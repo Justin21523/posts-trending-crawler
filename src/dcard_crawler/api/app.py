@@ -165,6 +165,10 @@ def create_app(
     def analytics_keyword_network():
         return queries.analytics_keyword_network()
 
+    @app.get("/analytics/keyword-insights")
+    def analytics_keyword_insights():
+        return queries.analytics_keyword_insights()
+
     @app.get("/analytics/keyword-heatmap")
     def analytics_keyword_heatmap():
         return queries.analytics_keyword_heatmap()

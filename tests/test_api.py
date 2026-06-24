@@ -223,6 +223,7 @@ def test_api_visualization_endpoints_after_demo_seed(tmp_path, monkeypatch):
     dashboard = client.get("/analytics/dashboard")
     time_series = client.get("/analytics/time-series")
     network = client.get("/analytics/keyword-network")
+    keyword_insights = client.get("/analytics/keyword-insights")
     heatmap = client.get("/analytics/keyword-heatmap")
     source_health = client.get("/analytics/source-health")
     lineage = client.get("/analytics/lineage")
@@ -234,10 +235,14 @@ def test_api_visualization_endpoints_after_demo_seed(tmp_path, monkeypatch):
     assert dashboard.json()["daily_platform_volume"]
     assert time_series.json()["daily_by_platform"]
     assert network.json()["nodes"]
+    assert "insight_summary" in network.json()["nodes"][0]
+    assert keyword_insights.json()["cards"]
     assert heatmap.json()["cells"]
     assert source_health.json()["rows"]
     assert lineage.json()["nodes"]
+    assert lineage.json()["nodes"][0]["label_zh"]
     assert crawl_flow.json()["nodes"][0]["data"]["label"] == "Source Select"
+    assert crawl_flow.json()["nodes"][0]["data"]["label_zh"] == "選擇資料來源"
     assert crawl_flow.json()["nodes"][1]["data"]["compliance"]
     assert top_posts.json()["rows"]
     assert "missing_content" in quality_table.json()
@@ -315,7 +320,14 @@ def test_api_compliance_excel_and_metadata_payloads(tmp_path, monkeypatch):
     )
 
     assert network.status_code == 200
-    assert {"category", "color", "metadata"}.issubset(network.json()["nodes"][0])
+    assert {
+        "category",
+        "color",
+        "metadata",
+        "platform_distribution",
+        "top_related_terms",
+        "evidence_posts",
+    }.issubset(network.json()["nodes"][0])
     assert compliance.status_code == 200
     assert compliance.json()["summary"]["source_count"] > 0
     assert compliance.json()["governance_rules"]
