@@ -1386,15 +1386,16 @@ function InsightDrawer({
   onDrilldown: (kind: string, id: string | number) => void;
   t: (key: string) => string;
 }) {
-  const relatedPostColumns = columnsForRows(insight.related_posts);
-  const relatedJobColumns = columnsForRows(insight.related_jobs);
+  const safeInsight = normalizeDrilldownResponse(insight, insight.kind, insight.id);
+  const relatedPostColumns = columnsForRows(safeInsight.related_posts);
+  const relatedJobColumns = columnsForRows(safeInsight.related_jobs);
   return (
     <aside className="drawer insight-drawer" aria-label="Insight detail">
       <div className="drawer-header">
         <div>
-          <p className="eyebrow">{insight.kind} / {insight.id}</p>
-          <h2>{insight.title}</h2>
-          <span>{insight.subtitle}</span>
+          <p className="eyebrow">{safeInsight.kind} / {safeInsight.id}</p>
+          <h2>{safeInsight.title}</h2>
+          <span>{safeInsight.subtitle}</span>
         </div>
         <button className="icon-button" type="button" onClick={onClose} aria-label="Close insight detail">
           <X size={17} />
@@ -1404,22 +1405,22 @@ function InsightDrawer({
       <div className="drawer-body">
         <div className="metadata-status">
           <strong>{t('metadata.status')} / Metadata</strong>
-          <span>{insight.metadata_status ?? 'available'}</span>
-          <small>Fields: {(insight.available_fields ?? []).join(', ') || '-'}</small>
+          <span>{safeInsight.metadata_status ?? 'available'}</span>
+          <small>Fields: {safeInsight.available_fields?.join(', ') || '-'}</small>
         </div>
-        <InsightSection title={String(t('common.summary'))} payload={insight.summary} />
-        <InsightSection title={String(t('common.metadata'))} payload={insight.metadata} />
-        {insight.quality_flags.length > 0 && (
+        <InsightSection title={String(t('common.summary'))} payload={safeInsight.summary} />
+        <InsightSection title={String(t('common.metadata'))} payload={safeInsight.metadata} />
+        {safeInsight.quality_flags.length > 0 && (
           <div className="detail-section">
             <strong>{t('common.qualityFlags')}</strong>
-            <TagList items={insight.quality_flags} tone="danger" />
+            <TagList items={safeInsight.quality_flags} tone="danger" />
           </div>
         )}
         <div className="detail-section">
           <strong>{t('common.relatedPosts')}</strong>
           <DataTable
             columns={relatedPostColumns}
-            data={insight.related_posts}
+            data={safeInsight.related_posts}
             onRowSelect={(row) => row.id && onDrilldown('post', String(row.id))}
           />
         </div>
@@ -1427,13 +1428,13 @@ function InsightDrawer({
           <strong>{t('common.relatedJobs')}</strong>
           <DataTable
             columns={relatedJobColumns}
-            data={insight.related_jobs}
+            data={safeInsight.related_jobs}
             onRowSelect={(row) => row.id && onDrilldown('job', String(row.id))}
           />
         </div>
         <div className="detail-section">
           <strong>{t('common.rawPayload')}</strong>
-          <pre className="json-panel">{JSON.stringify(insight.raw_payload, null, 2)}</pre>
+          <pre className="json-panel">{JSON.stringify(safeInsight.raw_payload, null, 2)}</pre>
         </div>
       </div>
     </aside>
@@ -1468,21 +1469,7 @@ function DetailPage() {
   const fallback = state?.fallback;
   const [detail, setDetail] = useState<DrilldownResponse | null>(
     fallback
-      ? {
-          kind: decodedKind,
-          id,
-          title: fallback.title ?? `${decodedKind}:${id}`,
-          subtitle: fallback.subtitle ?? '',
-          summary: fallback.summary ?? {},
-          metadata: fallback.metadata ?? {},
-          related_posts: fallback.related_posts ?? [],
-          related_jobs: fallback.related_jobs ?? [],
-          quality_flags: fallback.quality_flags ?? [],
-          raw_payload: fallback.raw_payload ?? {},
-          metadata_status: fallback.metadata_status,
-          available_fields: fallback.available_fields,
-          missing_fields: fallback.missing_fields,
-        }
+      ? normalizeDrilldownResponse(fallback, decodedKind, id)
       : null,
   );
   const [loading, setLoading] = useState(true);
@@ -1495,7 +1482,7 @@ function DetailPage() {
     api.analytics.drilldown({ kind: decodedKind, id })
       .then((response) => {
         if (active) {
-          setDetail(response);
+          setDetail(normalizeDrilldownResponse(response, decodedKind, id));
         }
       })
       .catch((err: Error) => {
@@ -1620,6 +1607,32 @@ function DetailPage() {
       </div>
     </section>
   );
+}
+
+function normalizeDrilldownResponse(
+  payload: Partial<DrilldownResponse>,
+  fallbackKind: string,
+  fallbackId: string,
+): DrilldownResponse {
+  return {
+    kind: String(payload.kind ?? fallbackKind),
+    id: String(payload.id ?? fallbackId),
+    title: String(payload.title ?? `${fallbackKind}:${fallbackId}`),
+    subtitle: String(payload.subtitle ?? ''),
+    summary: isRecord(payload.summary) ? payload.summary : {},
+    metadata: isRecord(payload.metadata) ? payload.metadata : {},
+    related_posts: Array.isArray(payload.related_posts) ? payload.related_posts : [],
+    related_jobs: Array.isArray(payload.related_jobs) ? payload.related_jobs : [],
+    quality_flags: Array.isArray(payload.quality_flags) ? payload.quality_flags.map(String) : [],
+    raw_payload: isRecord(payload.raw_payload) ? payload.raw_payload : {},
+    metadata_status: payload.metadata_status,
+    available_fields: Array.isArray(payload.available_fields) ? payload.available_fields : [],
+    missing_fields: Array.isArray(payload.missing_fields) ? payload.missing_fields : [],
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function InterviewDemoGuide({
