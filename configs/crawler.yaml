@@ -6,6 +6,10 @@ crawler:
   max_retries: 3
   retry_backoff_factor: 2
   popular_mode: false
+  request_budget_per_job: 500
+  respect_robots_txt: true
+  robots_unavailable_policy: "block"
+  cooldown_seconds_on_429: 300
 
 database:
   url: "sqlite:///data/dcard_crawler.db"

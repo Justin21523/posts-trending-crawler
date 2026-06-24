@@ -3,7 +3,11 @@
 import pytest
 
 from dcard_crawler.connectors.base import BaseConnector, ConnectorItem, ConnectorTarget
-from dcard_crawler.core.errors import RateLimitedError
+from dcard_crawler.core.errors import (
+    RateLimitedError,
+    RequestBudgetExceededError,
+    RobotsDisallowedError,
+)
 from dcard_crawler.database import init_db
 from dcard_crawler.models import CrawlJob
 from dcard_crawler.parsers.post_parser import PostParser
@@ -22,8 +26,8 @@ class FakeDcardConnector(BaseConnector):
     source_type = "forum"
     allowed_domains = ("www.dcard.tw",)
 
-    def __init__(self, *, fail_listing: bool = False):
-        self.fail_listing = fail_listing
+    def __init__(self, *, failure: Exception | None = None):
+        self.failure = failure
         self.request_count = 0
         self.parser = PostParser()
 
@@ -35,8 +39,8 @@ class FakeDcardConnector(BaseConnector):
 
     async def fetch_listing(self, target: ConnectorTarget, **kwargs) -> list[ConnectorItem]:
         self.request_count += 1
-        if self.fail_listing:
-            raise RateLimitedError("Request blocked by policy: http_429_rate_limited")
+        if self.failure:
+            raise self.failure
         return [
             ConnectorItem(
                 external_id="12345",
@@ -123,7 +127,13 @@ async def test_ingest_service_marks_job_completed(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ingest_service_marks_policy_error_failed(tmp_path, monkeypatch):
-    service = build_service(tmp_path, monkeypatch, FakeDcardConnector(fail_listing=True))
+    service = build_service(
+        tmp_path,
+        monkeypatch,
+        FakeDcardConnector(
+            failure=RateLimitedError("Request blocked by policy: http_429_rate_limited")
+        ),
+    )
 
     stats = await service.crawl_posts(
         forum_alias="trending",
@@ -139,3 +149,45 @@ async def test_ingest_service_marks_policy_error_failed(tmp_path, monkeypatch):
     assert job.status == "failed"
     assert job.error_category == "rate_limited"
     assert job.request_count == 1
+
+
+@pytest.mark.asyncio
+async def test_ingest_service_records_request_budget_error(tmp_path, monkeypatch):
+    service = build_service(
+        tmp_path,
+        monkeypatch,
+        FakeDcardConnector(failure=RequestBudgetExceededError("Request budget exceeded")),
+    )
+
+    stats = await service.crawl_posts(
+        forum_alias="trending",
+        max_posts=1,
+        fetch_details=False,
+        resume=False,
+    )
+
+    job = CrawlJobRepository().get_by_id(stats["job_id"])
+    assert isinstance(job, CrawlJob)
+    assert stats["status"] == "failed"
+    assert job.error_category == "budget_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_ingest_service_records_robots_disallowed_error(tmp_path, monkeypatch):
+    service = build_service(
+        tmp_path,
+        monkeypatch,
+        FakeDcardConnector(failure=RobotsDisallowedError("robots.txt disallows URL")),
+    )
+
+    stats = await service.crawl_posts(
+        forum_alias="trending",
+        max_posts=1,
+        fetch_details=False,
+        resume=False,
+    )
+
+    job = CrawlJobRepository().get_by_id(stats["job_id"])
+    assert isinstance(job, CrawlJob)
+    assert stats["status"] == "failed"
+    assert job.error_category == "robots_disallowed"

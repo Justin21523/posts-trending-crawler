@@ -47,6 +47,13 @@ class IngestService:
             self.connector_registry.register(dcard_connector)
         self.dcard_connector = self.connector_registry.get("dcard")
 
+    async def close(self) -> None:
+        """Close service-owned network resources."""
+        await self.api_client.close()
+        close_connector = getattr(self.dcard_connector, "close", None)
+        if close_connector:
+            await close_connector()
+
     async def crawl_posts(
         self,
         forum_alias: str,

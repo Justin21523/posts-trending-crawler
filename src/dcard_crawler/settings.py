@@ -17,6 +17,10 @@ class CrawlerSettings(BaseModel):
     max_retries: int = 3
     retry_backoff_factor: int = 2
     popular_mode: bool = False
+    request_budget_per_job: int = 500
+    respect_robots_txt: bool = True
+    robots_unavailable_policy: str = "block"
+    cooldown_seconds_on_429: int = 300
 
 
 class DatabaseSettings(BaseModel):

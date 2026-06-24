@@ -6,14 +6,10 @@ from pathlib import Path
 
 import typer
 
-from dcard_crawler.clients.api_client import DcardAPIClient
 from dcard_crawler.clients.browser_client import BrowserClient
 from dcard_crawler.database import init_db, is_current_schema
-from dcard_crawler.parsers.post_parser import PostParser
-from dcard_crawler.repositories.post_repository import PostRepository
 from dcard_crawler.services.checkpoint_service import CheckpointService
-from dcard_crawler.services.ingest_service import IngestService
-from dcard_crawler.services.quality_service import QualityService
+from dcard_crawler.services.factory import build_ingest_service
 from dcard_crawler.settings import settings
 
 app = typer.Typer(
@@ -141,20 +137,7 @@ def crawl_list(
     typer.echo(f"Starting crawl list: forum={forum} popular={popular} max_posts={max_posts}")
 
     async def _run():
-        api_client = DcardAPIClient()
-        repository = PostRepository()
-        parser = PostParser()
-        quality_service = QualityService()
-        checkpoint_service = CheckpointService()
-
-        ingest_service = IngestService(
-            api_client=api_client,
-            repository=repository,
-            parser=parser,
-            quality_service=quality_service,
-            checkpoint_service=checkpoint_service,
-        )
-
+        ingest_service = build_ingest_service()
         try:
             stats = await ingest_service.crawl_posts(
                 forum_alias=forum,
@@ -170,7 +153,7 @@ def crawl_list(
             typer.echo(f"  Posts skipped: {stats['posts_skipped']}")
             typer.echo(f"  Errors: {stats['errors']}")
         finally:
-            await api_client.close()
+            await ingest_service.close()
 
     asyncio.run(_run())
 
@@ -208,20 +191,7 @@ def crawl_posts(
     typer.echo(f"Starting full post crawl: forum={forum} popular={popular} max_posts={max_posts}")
 
     async def _run():
-        api_client = DcardAPIClient()
-        repository = PostRepository()
-        parser = PostParser()
-        quality_service = QualityService()
-        checkpoint_service = CheckpointService()
-
-        ingest_service = IngestService(
-            api_client=api_client,
-            repository=repository,
-            parser=parser,
-            quality_service=quality_service,
-            checkpoint_service=checkpoint_service,
-        )
-
+        ingest_service = build_ingest_service()
         try:
             stats = await ingest_service.crawl_posts(
                 forum_alias=forum,
@@ -238,7 +208,7 @@ def crawl_posts(
             typer.echo(f"  Posts skipped: {stats['posts_skipped']}")
             typer.echo(f"  Errors: {stats['errors']}")
         finally:
-            await api_client.close()
+            await ingest_service.close()
 
     asyncio.run(_run())
 
