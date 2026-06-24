@@ -103,6 +103,34 @@ def create_app(
     def reports():
         return queries.list_reports()
 
+    @app.get("/analytics/overview")
+    def analytics_overview():
+        return queries.analytics_overview()
+
+    @app.get("/analytics/trends")
+    def analytics_trends():
+        return queries.analytics_trends()
+
+    @app.get("/analytics/keywords")
+    def analytics_keywords():
+        return queries.analytics_keywords()
+
+    @app.get("/analytics/engagement")
+    def analytics_engagement():
+        return queries.analytics_engagement()
+
+    @app.get("/analytics/platforms")
+    def analytics_platforms():
+        return queries.analytics_platforms()
+
+    @app.get("/analytics/data-quality")
+    def analytics_data_quality():
+        return queries.analytics_data_quality()
+
+    @app.get("/workflow/summary")
+    def workflow_summary():
+        return queries.workflow_summary()
+
     @app.post("/verify/dcard", response_model=VerifyResponse)
     async def verify_dcard(request: VerifyDcardRequest):
         report = await controls.verify_dcard(

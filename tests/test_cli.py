@@ -197,10 +197,25 @@ def test_discover_and_verify_dcard_help_commands_run():
     discover_result = runner.invoke(app, ["discover-dcard-endpoints", "--help"])
     verify_result = runner.invoke(app, ["verify-dcard-endpoints", "--help"])
     serve_result = runner.invoke(app, ["serve-api", "--help"])
+    seed_result = runner.invoke(app, ["seed-demo-data", "--help"])
 
     assert discover_result.exit_code == 0
     assert verify_result.exit_code == 0
     assert serve_result.exit_code == 0
+    assert seed_result.exit_code == 0
+
+
+def test_seed_demo_data_cli_writes_labeled_records(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
+    monkeypatch.chdir(tmp_path)
+    init_db(reset=True)
+
+    result = CliRunner().invoke(app, ["seed-demo-data", "--rows", "120", "--reset-demo"])
+
+    assert result.exit_code == 0
+    assert "Demo dataset generated" in result.output
+    assert PostRepository().count() == 120
+    assert (tmp_path / "data" / "reports" / "crawl_runs" / "demo_seed_crawl_report.json").exists()
 
 
 def test_crawl_ptt_uses_service_factory_without_live_network(tmp_path, monkeypatch):

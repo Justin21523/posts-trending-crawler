@@ -87,3 +87,81 @@ export type DiagnosticsResponse = {
   summary: Record<string, unknown>;
   endpoints: Array<Record<string, unknown>>;
 };
+
+export type KPIOverview = {
+  total_sources: number;
+  total_posts: number;
+  successful_crawl_runs: number;
+  failed_crawl_runs: number;
+  parse_success_rate: number;
+  duplicate_rate: number;
+  total_crawl_runs: number;
+};
+
+export type AnalyticsOverview = {
+  demo_dataset_present: boolean;
+  kpis: KPIOverview;
+  platforms: Array<{ platform: string; count: number }>;
+  top_keywords: Array<{ keyword: string; count: number }>;
+  top_posts: EngagementPost[];
+  latest_jobs: Array<Record<string, unknown>>;
+};
+
+export type TrendAnalytics = {
+  daily_post_count: Array<{ date: string; platform: string; count: number }>;
+  top_boards: Array<{ board_or_forum: string; count: number }>;
+};
+
+export type KeywordAnalytics = {
+  keywords: Array<{ keyword: string; count: number }>;
+  by_platform: Array<{ platform: string; keyword: string; count: number }>;
+};
+
+export type EngagementPost = {
+  id: number;
+  source: string;
+  platform: string;
+  board_or_forum: string | null;
+  title: string;
+  published_at: string | null;
+  like_count: number;
+  comment_count: number;
+  view_count: number;
+  engagement_score: number;
+  url: string | null;
+};
+
+export type EngagementAnalytics = {
+  top_posts: EngagementPost[];
+  missing_metrics: Record<string, number>;
+  average_score_by_platform: Array<{ platform: string; average_engagement_score: number }>;
+};
+
+export type PlatformAnalytics = {
+  platforms: Array<{
+    platform: string;
+    post_count: number;
+    average_content_length: number;
+    average_engagement_score: number;
+    crawl_success_rate: number | null;
+  }>;
+};
+
+export type DataQualityAnalytics = {
+  total_posts: number;
+  demo_records: number;
+  checks: Array<{ name: string; count: number }>;
+  policy_events: Array<{ category: string; count: number }>;
+};
+
+export type WorkflowSummary = {
+  demo_dataset_present: boolean;
+  latest_error: Record<string, unknown> | null;
+  stages: Array<{
+    key: string;
+    label: string;
+    status: string;
+    count: number;
+    error_reason: string | null;
+  }>;
+};

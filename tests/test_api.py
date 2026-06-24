@@ -11,6 +11,7 @@ from dcard_crawler.repositories.crawl_job_repository import CrawlJobRepository
 from dcard_crawler.repositories.post_repository import PostRepository
 from dcard_crawler.repositories.source_repository import SourceRepository
 from dcard_crawler.schemas import NormalizedPost
+from dcard_crawler.services.demo_seed import DemoSeedService
 from dcard_crawler.settings import settings
 
 
@@ -153,3 +154,29 @@ def test_api_verify_and_diagnostics_use_control_service(tmp_path, monkeypatch):
     assert ptt.json()["platform"] == "ptt"
     assert news.json()["source"] == "demo-news"
     assert diagnostics.json()["summary"]["blocked_count"] == 1
+
+
+def test_api_analytics_endpoints_after_demo_seed(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
+    monkeypatch.chdir(tmp_path)
+    init_db(reset=True)
+    DemoSeedService(report_root=tmp_path / "data" / "reports").seed(rows=120, reset_demo=True)
+    client = TestClient(create_app(control_service=FakeControlService()))
+
+    overview = client.get("/analytics/overview")
+    trends = client.get("/analytics/trends")
+    keywords = client.get("/analytics/keywords")
+    engagement = client.get("/analytics/engagement")
+    platforms = client.get("/analytics/platforms")
+    quality = client.get("/analytics/data-quality")
+    workflow = client.get("/workflow/summary")
+
+    assert overview.status_code == 200
+    assert overview.json()["demo_dataset_present"] is True
+    assert overview.json()["kpis"]["total_posts"] == 120
+    assert trends.json()["daily_post_count"]
+    assert keywords.json()["keywords"]
+    assert engagement.json()["top_posts"]
+    assert platforms.json()["platforms"]
+    assert quality.json()["demo_records"] == 120
+    assert workflow.json()["stages"][0]["label"] == "Source Select"

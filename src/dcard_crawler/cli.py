@@ -208,6 +208,43 @@ def serve_api(
     )
 
 
+@app.command("seed-demo-data")
+def seed_demo_data(
+    rows: int = typer.Option(
+        2000,
+        "--rows",
+        help="Number of demo posts/articles to generate for portfolio preview.",
+        min=100,
+        max=5000,
+    ),
+    reset_demo: bool = typer.Option(
+        False,
+        "--reset-demo",
+        help="Delete existing generated demo records before seeding.",
+    ),
+):
+    """Seed clearly labeled multi-platform demo data for UI and analytics demos."""
+    from loguru import logger
+
+    from dcard_crawler.services.demo_seed import DemoSeedService
+
+    if not _require_current_schema():
+        raise typer.Exit(1)
+
+    logger.disable("dcard_crawler.repositories")
+    try:
+        stats = DemoSeedService().seed(rows=rows, reset_demo=reset_demo)
+    finally:
+        logger.enable("dcard_crawler.repositories")
+    typer.echo("✓ Demo dataset generated for portfolio preview")
+    typer.echo(f"  Posts inserted: {stats['posts_inserted']}")
+    typer.echo(f"  Posts updated: {stats['posts_updated']}")
+    typer.echo(f"  Sources: {stats['sources']}")
+    typer.echo(f"  Crawl jobs: {stats['crawl_jobs']}")
+    for report_path in stats["reports"]:
+        typer.echo(f"  Report: {report_path}")
+
+
 @app.command()
 def discover_endpoints(
     url: str = typer.Option(

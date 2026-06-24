@@ -1,12 +1,19 @@
 import type {
+  AnalyticsOverview,
   CrawlJobResponse,
+  DataQualityAnalytics,
   DashboardSummary,
   DiagnosticsResponse,
+  EngagementAnalytics,
   HealthResponse,
+  KeywordAnalytics,
+  PlatformAnalytics,
   PostResponse,
   ReportSummary,
   SourceResponse,
+  TrendAnalytics,
   VerifyResponse,
+  WorkflowSummary,
 } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
@@ -68,4 +75,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  analytics: {
+    overview: () => request<AnalyticsOverview>('/analytics/overview'),
+    trends: () => request<TrendAnalytics>('/analytics/trends'),
+    keywords: () => request<KeywordAnalytics>('/analytics/keywords'),
+    engagement: () => request<EngagementAnalytics>('/analytics/engagement'),
+    platforms: () => request<PlatformAnalytics>('/analytics/platforms'),
+    dataQuality: () => request<DataQualityAnalytics>('/analytics/data-quality'),
+    workflow: () => request<WorkflowSummary>('/workflow/summary'),
+  },
 };

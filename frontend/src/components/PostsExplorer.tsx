@@ -7,9 +7,10 @@ type PostsExplorerProps = {
   filters: PostFilters;
   loading: boolean;
   onFiltersChange: (filters: PostFilters) => void;
+  onSelectPost?: (post: PostResponse) => void;
 };
 
-export function PostsExplorer({ posts, filters, loading, onFiltersChange }: PostsExplorerProps) {
+export function PostsExplorer({ posts, filters, loading, onFiltersChange, onSelectPost }: PostsExplorerProps) {
   return (
     <section className="panel wide-panel">
       <div className="panel-header">
@@ -62,7 +63,9 @@ export function PostsExplorer({ posts, filters, loading, onFiltersChange }: Post
                   <td>{post.platform}</td>
                   <td>{post.board_or_forum ?? '-'}</td>
                   <td>
-                    {post.url ? <a href={post.url} target="_blank" rel="noreferrer">{post.title}</a> : post.title}
+                    <button className="link-button" type="button" onClick={() => onSelectPost?.(post)}>
+                      {post.title}
+                    </button>
                     <p>{post.excerpt || post.content || ''}</p>
                   </td>
                   <td>{post.comment_count}</td>
