@@ -1,0 +1,6 @@
+# Example keywords for public forum/news analysis.
+台灣
+AI
+科技
+新聞
+工作

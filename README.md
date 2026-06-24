@@ -11,7 +11,7 @@ A production-style crawler system for collecting public posts from Dcard's trend
 - **Rate Limiting**: Built-in throttling to avoid overwhelming the target server
 - **Retry Logic**: Exponential backoff for handling transient failures
 - **Structured Storage**: SQLite database with clean schema for PostgreSQL migration path
-- **Export**: JSONL and CSV export for downstream NLP/analysis workflows
+- **Export & Analytics**: JSONL/CSV export plus Excel reports for keyword, trend, engagement, and source analysis
 
 ## Installation
 
@@ -41,6 +41,12 @@ dcard-crawler status
 
 # 5. Export data
 dcard-crawler export --format jsonl --output data/exports/posts.jsonl
+
+# 6. Build an Excel analytics report
+dcard-crawler analyze-excel \
+  --input data/exports/posts.jsonl \
+  --keywords configs/keywords.txt \
+  --output data/exports/analysis_report.xlsx
 ```
 
 ## CLI Commands
@@ -97,6 +103,43 @@ dcard-crawler export --format jsonl --limit 1000
 dcard-crawler export --format csv --output posts.csv
 ```
 
+### `analyze-excel`
+Build a formatted Excel report from SQLite, CSV, JSONL, or XLSX input.
+
+```bash
+dcard-crawler analyze-excel \
+    --input data/exports/posts.csv \
+    --keywords configs/keywords.txt \
+    --output data/exports/analysis_report.xlsx
+```
+
+The report includes:
+
+- `Summary`
+- `Raw Data`
+- `Keyword Matches`
+- `Daily Trend`
+- `Top Posts`
+- `Source Comparison`
+
+### Analysis Commands
+Run focused analysis outputs as CSV, JSONL, or XLSX.
+
+```bash
+dcard-crawler analyze-keywords \
+    --input data/exports/posts.csv \
+    --keywords configs/keywords.txt \
+    --output data/exports/keyword_matches.csv
+
+dcard-crawler analyze-trending \
+    --input data/exports/posts.csv \
+    --output data/exports/daily_trend.csv
+
+dcard-crawler analyze-source-comparison \
+    --input data/exports/posts.csv \
+    --output data/exports/source_comparison.csv
+```
+
 ## Architecture
 
 ### Dual-Mode Design
@@ -129,6 +172,7 @@ dcard-trending-crawler/
 │  │  └─ browser_client.py   # Playwright client
 │  ├─ parsers/               # Data parsers
 │  │  └─ post_parser.py
+│  ├─ analysis/              # Pandas and Excel analytics
 │  ├─ repositories/          # Data access layer
 │  │  └─ post_repository.py
 │  ├─ services/              # Business logic

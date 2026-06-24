@@ -318,3 +318,110 @@ def test_export_outputs_news_row(tmp_path, monkeypatch):
     assert record["platform"] == "news"
     assert record["source"] == "demo-news"
     assert record["board_or_forum"] == "社會"
+
+
+def _write_analysis_csv(path):
+    rows = [
+        {
+            "source": "dcard",
+            "platform": "dcard",
+            "external_id": "1",
+            "post_id": "1",
+            "forum_alias": "tech",
+            "board_or_forum": "tech",
+            "title": "AI 科技新聞",
+            "excerpt": "台灣 AI 討論",
+            "content": "AI 正在改變工作與科技產業",
+            "published_at": "2024-01-01T10:00:00Z",
+            "created_at": "2024-01-01T10:00:00Z",
+            "crawled_at": "2024-01-01T11:00:00Z",
+            "like_count": "10",
+            "comment_count": "2",
+            "share_count": "1",
+            "view_count": "100",
+            "url": "https://www.dcard.tw/f/tech/p/1",
+            "canonical_url": "https://www.dcard.tw/f/tech/p/1",
+            "content_hash": "hash-1",
+        }
+    ]
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def test_analysis_cli_commands_run_from_file_input(tmp_path):
+    input_path = tmp_path / "posts.csv"
+    keyword_path = tmp_path / "keywords.txt"
+    _write_analysis_csv(input_path)
+    keyword_path.write_text("AI\n科技\n", encoding="utf-8")
+
+    runner = CliRunner()
+    excel_result = runner.invoke(
+        app,
+        [
+            "analyze-excel",
+            "--input",
+            str(input_path),
+            "--keywords",
+            str(keyword_path),
+            "--output",
+            str(tmp_path / "report.xlsx"),
+        ],
+    )
+    keyword_result = runner.invoke(
+        app,
+        [
+            "analyze-keywords",
+            "--input",
+            str(input_path),
+            "--keywords",
+            str(keyword_path),
+            "--output",
+            str(tmp_path / "matches.csv"),
+        ],
+    )
+    trend_result = runner.invoke(
+        app,
+        ["analyze-trending", "--input", str(input_path), "--output", str(tmp_path / "trend.csv")],
+    )
+    source_result = runner.invoke(
+        app,
+        [
+            "analyze-source-comparison",
+            "--input",
+            str(input_path),
+            "--output",
+            str(tmp_path / "sources.csv"),
+        ],
+    )
+
+    assert excel_result.exit_code == 0
+    assert keyword_result.exit_code == 0
+    assert trend_result.exit_code == 0
+    assert source_result.exit_code == 0
+    assert (tmp_path / "report.xlsx").exists()
+    assert (tmp_path / "matches.csv").exists()
+    assert (tmp_path / "trend.csv").exists()
+    assert (tmp_path / "sources.csv").exists()
+
+
+def test_export_excel_report_alias_runs(tmp_path):
+    input_path = tmp_path / "posts.csv"
+    _write_analysis_csv(input_path)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "export-excel-report",
+            "--input",
+            str(input_path),
+            "--keyword",
+            "AI",
+            "--output",
+            str(tmp_path / "alias-report.xlsx"),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert (tmp_path / "alias-report.xlsx").exists()

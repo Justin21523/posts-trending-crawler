@@ -28,6 +28,12 @@ app = typer.Typer(
     add_completion=False,
 )
 
+KEYWORD_OPTION = typer.Option(
+    None,
+    "--keyword",
+    help="Inline keyword. Can be passed multiple times.",
+)
+
 
 def _require_current_schema() -> bool:
     """Return False and print a user-facing hint when DB schema is stale."""
@@ -753,6 +759,181 @@ def export(
             raise typer.Exit(1)
 
     typer.echo(f"✓ Exported to {output_path}")
+
+
+def _write_analysis_output(rows, output: str, default_format: str = "csv") -> Path:
+    """Write an analysis DataFrame to CSV, JSONL, or XLSX."""
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    suffix = output_path.suffix.lower()
+    if suffix == ".jsonl":
+        rows.to_json(output_path, orient="records", lines=True, force_ascii=False)
+    elif suffix in {".xlsx", ".xls"}:
+        rows.to_excel(output_path, index=False)
+    elif suffix == ".csv" or default_format == "csv":
+        rows.to_csv(output_path, index=False)
+    else:
+        raise typer.BadParameter("output must end with .csv, .jsonl, or .xlsx")
+    return output_path
+
+
+@app.command("analyze-excel")
+def analyze_excel(
+    input_path: str | None = typer.Option(
+        None,
+        "--input",
+        "-i",
+        help="Input SQLite/CSV/JSONL/XLSX path. Defaults to configured SQLite database.",
+    ),
+    keywords: str | None = typer.Option(
+        "configs/keywords.txt",
+        "--keywords",
+        "-k",
+        help="Keyword file path. One keyword per line.",
+    ),
+    keyword: list[str] | None = KEYWORD_OPTION,
+    output: str = typer.Option(
+        "data/exports/analysis_report.xlsx",
+        "--output",
+        "-o",
+        help="Excel report output path.",
+    ),
+):
+    """Build an Excel analysis report from SQLite, CSV, JSONL, or XLSX data."""
+    from dcard_crawler.analysis.excel_report import export_analysis_report
+
+    if input_path is None and not _require_current_schema():
+        raise typer.Exit(1)
+
+    tables = export_analysis_report(input_path, output, keywords, keyword)
+    typer.echo(f"✓ Excel analysis report exported to {output}")
+    typer.echo(f"  Rows: {len(tables['Raw Data'])}")
+    typer.echo(f"  Keyword matches: {len(tables['Keyword Matches'])}")
+
+
+@app.command("export-excel-report")
+def export_excel_report(
+    input_path: str | None = typer.Option(
+        None,
+        "--input",
+        "-i",
+        help="Input SQLite/CSV/JSONL/XLSX path. Defaults to configured SQLite database.",
+    ),
+    keywords: str | None = typer.Option(
+        "configs/keywords.txt",
+        "--keywords",
+        "-k",
+        help="Keyword file path. One keyword per line.",
+    ),
+    keyword: list[str] | None = KEYWORD_OPTION,
+    output: str = typer.Option(
+        "data/exports/analysis_report.xlsx",
+        "--output",
+        "-o",
+        help="Excel report output path.",
+    ),
+):
+    """Alias for analyze-excel."""
+    analyze_excel(input_path=input_path, keywords=keywords, keyword=keyword, output=output)
+
+
+@app.command("analyze-keywords")
+def analyze_keywords_command(
+    input_path: str | None = typer.Option(
+        None,
+        "--input",
+        "-i",
+        help="Input SQLite/CSV/JSONL/XLSX path. Defaults to configured SQLite database.",
+    ),
+    keywords: str | None = typer.Option(
+        "configs/keywords.txt",
+        "--keywords",
+        "-k",
+        help="Keyword file path. One keyword per line.",
+    ),
+    keyword: list[str] | None = KEYWORD_OPTION,
+    output: str = typer.Option(
+        "data/exports/keyword_matches.csv",
+        "--output",
+        "-o",
+        help="Output CSV/JSONL/XLSX path.",
+    ),
+):
+    """Analyze keyword matches across title, excerpt, and content."""
+    from dcard_crawler.analysis.cleaning import clean_posts_dataframe
+    from dcard_crawler.analysis.dataframe_loader import load_posts_dataframe
+    from dcard_crawler.analysis.keyword_analysis import analyze_keywords, load_keywords
+
+    if input_path is None and not _require_current_schema():
+        raise typer.Exit(1)
+
+    posts = clean_posts_dataframe(load_posts_dataframe(input_path))
+    keyword_list = load_keywords(keywords, keyword)
+    matches = analyze_keywords(posts, keyword_list)
+    output_path = _write_analysis_output(matches, output)
+    typer.echo(f"✓ Keyword analysis exported to {output_path}")
+    typer.echo(f"  Keyword matches: {len(matches)}")
+
+
+@app.command("analyze-trending")
+def analyze_trending(
+    input_path: str | None = typer.Option(
+        None,
+        "--input",
+        "-i",
+        help="Input SQLite/CSV/JSONL/XLSX path. Defaults to configured SQLite database.",
+    ),
+    output: str = typer.Option(
+        "data/exports/daily_trend.csv",
+        "--output",
+        "-o",
+        help="Output CSV/JSONL/XLSX path.",
+    ),
+):
+    """Analyze daily post trends by platform and board/forum."""
+    from dcard_crawler.analysis.cleaning import clean_posts_dataframe
+    from dcard_crawler.analysis.dataframe_loader import load_posts_dataframe
+    from dcard_crawler.analysis.trend_analysis import daily_post_counts
+
+    if input_path is None and not _require_current_schema():
+        raise typer.Exit(1)
+
+    trends = daily_post_counts(clean_posts_dataframe(load_posts_dataframe(input_path)))
+    output_path = _write_analysis_output(trends, output)
+    typer.echo(f"✓ Trend analysis exported to {output_path}")
+    typer.echo(f"  Rows: {len(trends)}")
+
+
+@app.command("analyze-source-comparison")
+def analyze_source_comparison(
+    input_path: str | None = typer.Option(
+        None,
+        "--input",
+        "-i",
+        help="Input SQLite/CSV/JSONL/XLSX path. Defaults to configured SQLite database.",
+    ),
+    output: str = typer.Option(
+        "data/exports/source_comparison.csv",
+        "--output",
+        "-o",
+        help="Output CSV/JSONL/XLSX path.",
+    ),
+):
+    """Compare post volume and engagement across sources."""
+    from dcard_crawler.analysis.cleaning import clean_posts_dataframe
+    from dcard_crawler.analysis.dataframe_loader import load_posts_dataframe
+    from dcard_crawler.analysis.engagement_analysis import add_engagement_score
+    from dcard_crawler.analysis.source_comparison import source_comparison
+
+    if input_path is None and not _require_current_schema():
+        raise typer.Exit(1)
+
+    posts = add_engagement_score(clean_posts_dataframe(load_posts_dataframe(input_path)))
+    comparison = source_comparison(posts)
+    output_path = _write_analysis_output(comparison, output)
+    typer.echo(f"✓ Source comparison exported to {output_path}")
+    typer.echo(f"  Rows: {len(comparison)}")
 
 
 if __name__ == "__main__":
