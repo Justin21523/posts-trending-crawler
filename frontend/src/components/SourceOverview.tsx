@@ -1,4 +1,5 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useTranslation } from 'react-i18next';
 import type { DashboardSummary, SourceResponse } from '../api/types';
 
 type SourceOverviewProps = {
@@ -8,6 +9,7 @@ type SourceOverviewProps = {
 };
 
 export function SourceOverview({ sources, summary, onSelectSource }: SourceOverviewProps) {
+  const { t } = useTranslation();
   const platformData = Object.entries(summary?.platforms ?? {}).map(([name, value]) => ({
     name,
     value,
@@ -16,12 +18,12 @@ export function SourceOverview({ sources, summary, onSelectSource }: SourceOverv
   return (
     <section className="panel source-panel">
       <div className="panel-header">
-        <h2>Sources</h2>
+        <h2>{t('source.title')}</h2>
       </div>
       <div className="source-layout">
         <div className="source-list">
           {sources.length === 0 ? (
-            <div className="empty-state">No sources yet.</div>
+            <div className="empty-state">{t('source.noSources')}</div>
           ) : (
             sources.map((source) => (
               <button className="source-row interactive-row" type="button" key={source.id} onClick={() => onSelectSource?.(source)}>
@@ -29,14 +31,14 @@ export function SourceOverview({ sources, summary, onSelectSource }: SourceOverv
                   <strong>{source.name}</strong>
                   <span>{source.source_type}</span>
                 </div>
-                <span className={source.enabled ? 'pill pill-green' : 'pill'}>{source.enabled ? 'enabled' : 'off'}</span>
+                <span className={source.enabled ? 'pill pill-green' : 'pill'}>{source.enabled ? t('common.enabled') : t('common.disabled')}</span>
               </button>
             ))
           )}
         </div>
         <div className="chart-box">
           {platformData.length === 0 ? (
-            <div className="empty-state">No platform data.</div>
+            <div className="empty-state">{t('source.noPlatform')}</div>
           ) : (
             <ResponsiveContainer width="100%" height={190}>
               <BarChart data={platformData} layout="vertical" margin={{ top: 10, right: 12, bottom: 10, left: 10 }}>

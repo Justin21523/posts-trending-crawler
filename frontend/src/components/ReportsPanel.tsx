@@ -1,4 +1,5 @@
 import { FileJson } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { ReportSummary } from '../api/types';
 import { StatusBadge } from './StatusBadge';
 
@@ -8,14 +9,15 @@ type ReportsPanelProps = {
 };
 
 export function ReportsPanel({ reports, onSelectReport }: ReportsPanelProps) {
+  const { t } = useTranslation();
   return (
     <section className="panel">
       <div className="panel-header">
-        <h2>Reports</h2>
+        <h2>{t('reports.history')}</h2>
       </div>
       <div className="report-list">
         {reports.length === 0 ? (
-          <div className="empty-state">No reports yet.</div>
+          <div className="empty-state">{t('reports.noReports')}</div>
         ) : (
           reports.map((report) => (
             <button className="report-row interactive-row" type="button" key={report.path} onClick={() => onSelectReport?.(report)}>

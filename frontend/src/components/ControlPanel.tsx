@@ -1,5 +1,6 @@
 import { Play, Radar } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { DiagnosticsResponse, VerifyResponse } from '../api/types';
 
 type ControlPanelProps = {
@@ -16,12 +17,13 @@ type ControlPanelProps = {
 };
 
 export function ControlPanel({ onVerifyDcard, onVerifyPtt, onVerifyNews, onDiagnoseDcard }: ControlPanelProps) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState<string | null>(null);
-  const [result, setResult] = useState<string>('No run started.');
+  const [result, setResult] = useState<string>(t('compliance.noRun'));
 
   async function run(label: string, action: () => Promise<VerifyResponse | DiagnosticsResponse>) {
     setBusy(label);
-    setResult(`Running ${label}...`);
+    setResult(`${t('compliance.running')} ${label}...`);
     try {
       const response = await action();
       setResult(`${label}: ${response.report_path}`);
@@ -35,7 +37,7 @@ export function ControlPanel({ onVerifyDcard, onVerifyPtt, onVerifyNews, onDiagn
   return (
     <section className="panel control-panel">
       <div className="panel-header">
-        <h2>Crawler Control</h2>
+        <h2>{t('compliance.control')}</h2>
       </div>
       <div className="control-grid">
         <button onClick={() => run('Dcard verify', () => onVerifyDcard({ forum: 'trending', mode: 'latest', max_posts: 3 }))} disabled={busy !== null}>
@@ -48,7 +50,7 @@ export function ControlPanel({ onVerifyDcard, onVerifyPtt, onVerifyNews, onDiagn
           <Play size={16} /> News
         </button>
         <button onClick={() => run('Dcard diagnostics', () => onDiagnoseDcard({ forum: 'trending' }))} disabled={busy !== null}>
-          <Radar size={16} /> Diagnose
+          <Radar size={16} /> {t('compliance.diagnose')}
         </button>
       </div>
       <div className="run-result">{result}</div>

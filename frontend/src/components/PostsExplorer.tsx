@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { PostFilters } from '../api/client';
 import type { PostResponse } from '../api/types';
 
@@ -23,6 +24,7 @@ export function PostsExplorer({
   onPageChange,
   onSelectPost,
 }: PostsExplorerProps) {
+  const { t } = useTranslation();
   const limit = filters.limit ?? 50;
   const offset = filters.offset ?? 0;
   const nextOffset = Math.min(offset + limit, Math.max(total - limit, 0));
@@ -30,8 +32,8 @@ export function PostsExplorer({
   return (
     <section className="panel wide-panel">
       <div className="panel-header">
-        <h2>Posts Explorer</h2>
-        <span className="pill">{total} rows</span>
+        <h2>{t('explorer.title')}</h2>
+        <span className="pill">{total} {t('common.rows')}</span>
       </div>
       <div className="facet-strip">
         {(facets.platforms ?? []).slice(0, 4).map((facet) => (
@@ -40,19 +42,19 @@ export function PostsExplorer({
       </div>
       <div className="filters">
         <label>
-          <span>Platform</span>
+          <span>{t('common.platform')}</span>
           <select
             value={filters.platform ?? ''}
             onChange={(event) => onFiltersChange({ ...filters, platform: event.target.value || undefined })}
           >
-            <option value="">All</option>
+            <option value="">{t('explorer.all')}</option>
             <option value="dcard">Dcard</option>
             <option value="ptt">PTT</option>
             <option value="news">News</option>
           </select>
         </label>
         <label>
-          <span>Keyword</span>
+          <span>{t('explorer.search')}</span>
           <div className="search-input">
             <Search size={15} />
             <input
@@ -67,18 +69,18 @@ export function PostsExplorer({
         <table>
           <thead>
             <tr>
-              <th>Platform</th>
-              <th>Board</th>
-              <th>Title</th>
-              <th>Comments</th>
-              <th>Published</th>
+              <th>{t('common.platform')}</th>
+              <th>{t('common.board')}</th>
+              <th>{t('common.title')}</th>
+              <th>{t('common.comments')}</th>
+              <th>{t('common.published')}</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5}>Loading posts...</td></tr>
+              <tr><td colSpan={5}>{t('explorer.loading')}</td></tr>
             ) : posts.length === 0 ? (
-              <tr><td colSpan={5}>No posts match the current filters.</td></tr>
+              <tr><td colSpan={5}>{t('explorer.empty')}</td></tr>
             ) : (
               posts.map((post) => (
                 <tr key={`${post.source}:${post.external_id}`}>
@@ -100,13 +102,13 @@ export function PostsExplorer({
       </div>
       <div className="pagination-row">
         <button type="button" onClick={() => onPageChange(previousOffset)} disabled={offset === 0 || loading}>
-          Previous
+          {t('explorer.previous')}
         </button>
         <span>
-          Showing {total ? offset + 1 : 0}-{Math.min(offset + posts.length, total)} of {total}
+          {t('explorer.showing', { start: total ? offset + 1 : 0, end: Math.min(offset + posts.length, total), total })}
         </span>
         <button type="button" onClick={() => onPageChange(nextOffset)} disabled={offset + limit >= total || loading}>
-          Next
+          {t('explorer.next')}
         </button>
       </div>
     </section>

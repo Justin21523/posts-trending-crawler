@@ -39,6 +39,8 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Area,
   AreaChart,
@@ -143,6 +145,27 @@ const pages: Array<{ key: PageKey; labelKey: string; icon: typeof Activity }> = 
 const chartColors = ['#2563eb', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#0891b2'];
 const graphNodeTypes = { enhanced: EnhancedFlowNode };
 
+const pagePaths: Record<PageKey, string> = {
+  overview: '/overview',
+  demo: '/demo',
+  architecture: '/architecture',
+  sources: '/sources',
+  workflow: '/workflow',
+  lifecycle: '/lifecycle',
+  runs: '/runs',
+  explorer: '/explorer',
+  trends: '/trends',
+  keywords: '/keywords',
+  engagement: '/engagement',
+  platforms: '/platforms',
+  quality: '/quality',
+  reports: '/reports',
+  compliance: '/compliance',
+  settings: '/settings',
+};
+
+const pathPages = new Map(Object.entries(pagePaths).map(([key, path]) => [path, key as PageKey]));
+
 const messages: Record<Language, Record<string, string>> = {
   zh: {
     'page.overview': '總覽儀表板',
@@ -237,6 +260,7 @@ const messages: Record<Language, Record<string, string>> = {
 const tourSteps: Array<{
   page: PageKey;
   target: string;
+  i18nKey: string;
   title: Record<Language, string>;
   body: Record<Language, string>;
   bullets: Record<Language, string[]>;
@@ -244,6 +268,7 @@ const tourSteps: Array<{
   {
     page: 'overview',
     target: 'overview-kpis',
+    i18nKey: 'overview',
     title: { zh: '先看總覽 KPI', en: 'Start with overview KPIs' },
     body: {
       zh: '這裡快速展示資料來源、文章量、crawl jobs 與 API 狀態，讓面試官先理解系統規模。',
@@ -257,6 +282,7 @@ const tourSteps: Array<{
   {
     page: 'demo',
     target: 'demo-workflow',
+    i18nKey: 'demo',
     title: { zh: '執行展示資料流程', en: 'Run the demo workflow' },
     body: {
       zh: '這一步用可重現的 demo dataset 展示完整 pipeline，不依賴外部網站當下是否可抓。',
@@ -267,6 +293,7 @@ const tourSteps: Array<{
   {
     page: 'architecture',
     target: 'architecture-map',
+    i18nKey: 'architecture',
     title: { zh: '解釋系統架構', en: 'Explain the architecture' },
     body: { zh: '用節點圖說明 Sources、Connectors、Crawler Core、SQLite、API、React 與 Excel Export。', en: 'Use the graph to explain sources, connectors, crawler core, SQLite, API, React, and Excel export.' },
     bullets: { zh: ['點節點看 metadata', '強調 connector-based 架構'], en: ['Click nodes for metadata', 'Highlight connector-based design'] },
@@ -274,6 +301,7 @@ const tourSteps: Array<{
   {
     page: 'workflow',
     target: 'workflow-graph',
+    i18nKey: 'workflow',
     title: { zh: '展示合規爬蟲流程', en: 'Show crawler governance flow' },
     body: { zh: '每個節點都有 inputs、outputs、failure modes 與 compliance policy。', en: 'Each node exposes inputs, outputs, failure modes, and compliance policy.' },
     bullets: { zh: ['Policy Check 不做 bypass', '403/429/CAPTCHA fail closed'], en: ['Policy Check does not bypass', '403/429/CAPTCHA fail closed'] },
@@ -281,6 +309,7 @@ const tourSteps: Array<{
   {
     page: 'keywords',
     target: 'keyword-network',
+    i18nKey: 'keyword',
     title: { zh: '查看 Keyword Network', en: 'Explore the Keyword Network' },
     body: { zh: '不同顏色代表不同主題分群，點擊節點可看相關文章與 metadata。', en: 'Colors represent topic groups; click nodes to inspect related posts and metadata.' },
     bullets: { zh: ['圓形節點大小代表出現次數', '線條代表共同出現'], en: ['Circle size reflects frequency', 'Links show co-occurrence'] },
@@ -288,6 +317,7 @@ const tourSteps: Array<{
   {
     page: 'compliance',
     target: 'compliance-summary',
+    i18nKey: 'compliance',
     title: { zh: '說明合規與診斷', en: 'Explain compliance diagnostics' },
     body: { zh: '這頁把 robots、policy blocks、429/403、source health 變成可分析資料。', en: 'This page turns robots, policy blocks, 429/403, and source health into analyzable data.' },
     bullets: { zh: ['不繞過平台限制', '所有 stop condition 都可追蹤'], en: ['No platform bypass', 'Every stop condition is traceable'] },
@@ -295,6 +325,7 @@ const tourSteps: Array<{
   {
     page: 'reports',
     target: 'report-center',
+    i18nKey: 'report',
     title: { zh: '產生 Excel 報表', en: 'Generate Excel report' },
     body: { zh: '最後展示資料工程成果可以輸出成可交付的 Excel analytics report。', en: 'Finally show that the pipeline produces a deliverable Excel analytics report.' },
     bullets: { zh: ['按 Generate Excel Report', '報表會出現在 reports list'], en: ['Click Generate Excel Report', 'The report appears in the reports list'] },
@@ -302,8 +333,12 @@ const tourSteps: Array<{
 ];
 
 export function App() {
-  const [activePage, setActivePage] = useState<PageKey>('overview');
-  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('twCrawlerLang') as Language) || 'zh');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { t, i18n } = useTranslation();
+  const routePage = pathPages.get(location.pathname) ?? (location.pathname === '/' ? 'overview' : null);
+  const isDetailRoute = location.pathname.startsWith('/detail/');
+  const [activePage, setActivePage] = useState<PageKey>(routePage ?? 'overview');
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [dashboard, setDashboard] = useState<DashboardAnalytics | null>(null);
@@ -342,11 +377,11 @@ export function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const [status, setStatus] = useState('Connecting to backend...');
-  const t = useCallback((key: string) => messages[language][key] ?? messages.en[key] ?? key, [language]);
+  const language = i18n.language === 'en' ? 'en' : 'zh';
 
   function changeLanguage(next: Language) {
-    setLanguage(next);
     localStorage.setItem('twCrawlerLang', next);
+    void i18n.changeLanguage(next);
   }
 
   const loadCore = useCallback(async () => {
@@ -455,27 +490,11 @@ export function App() {
     }
   }, []);
 
-  async function openDrilldown(kind: string, id: string | number, fallback?: Partial<DrilldownResponse>) {
-    setInsight({
-      kind,
-      id: String(id),
-      title: fallback?.title ?? `${kind}:${id}`,
-      subtitle: fallback?.subtitle ?? 'Loading detail...',
-      summary: fallback?.summary ?? {},
-      metadata: fallback?.metadata ?? {},
-      related_posts: fallback?.related_posts ?? [],
-      related_jobs: fallback?.related_jobs ?? [],
-      quality_flags: fallback?.quality_flags ?? [],
-      raw_payload: fallback?.raw_payload ?? {},
+  function openDrilldown(kind: string, id: string | number, fallback?: Partial<DrilldownResponse>) {
+    setInsight(null);
+    navigate(`/detail/${encodeURIComponent(kind)}/${encodeURIComponent(String(id))}`, {
+      state: { fallback, from: location.pathname },
     });
-    setInsightLoading(true);
-    try {
-      setInsight(await api.analytics.drilldown({ kind, id }));
-    } catch (error) {
-      setStatus((error as Error).message);
-    } finally {
-      setInsightLoading(false);
-    }
   }
 
   useEffect(() => {
@@ -485,6 +504,12 @@ export function App() {
   useEffect(() => {
     void loadPosts(filters);
   }, [filters, loadPosts]);
+
+  useEffect(() => {
+    if (routePage) {
+      setActivePage(routePage);
+    }
+  }, [routePage]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -555,6 +580,7 @@ export function App() {
                 type="button"
                 onClick={() => {
                   setInsight(null);
+                  navigate(pagePaths[page.key]);
                   setActivePage(page.key);
                 }}
               >
@@ -570,7 +596,7 @@ export function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">{t('top.eyebrow')}</p>
-            <h1>{t(pages.find((page) => page.key === activePage)?.labelKey ?? '')}</h1>
+            <h1>{isDetailRoute ? t('detail.title') : t(pages.find((page) => page.key === activePage)?.labelKey ?? '')}</h1>
           </div>
           <div className="topbar-actions">
             <div className="language-toggle" aria-label="Language switcher">
@@ -607,7 +633,7 @@ export function App() {
 
         {overview?.demo_dataset_present && (
           <div className="demo-banner">
-            Demo dataset generated for portfolio preview. Records are labeled with crawl_source=demo.
+            {t('top.demoBanner')}
           </div>
         )}
 
@@ -627,19 +653,20 @@ export function App() {
                 block: 'center',
               });
             }, 120);
+            navigate(pagePaths[page]);
           }}
           onOpen={() => {
             setInsight(null);
             setAssistantOpen(true);
             setTourStep(0);
             setActivePage(tourSteps[0].page);
+            navigate(pagePaths[tourSteps[0].page]);
           }}
-          t={t}
         />
-        {coreLoading && <div className="loading-strip">Loading analytics endpoints...</div>}
+        {coreLoading && <div className="loading-strip">{t('top.loading')}</div>}
         <EndpointStatusMatrix statuses={endpointStatus} />
 
-        {renderPage(activePage)}
+        {isDetailRoute ? <DetailPage /> : renderPage(activePage)}
       </section>
 
       {insight && (
@@ -711,7 +738,7 @@ export function App() {
           />
         );
       case 'runs':
-        return <JobsTimeline jobs={jobs} />;
+        return <JobsTimeline jobs={jobs} onSelectJob={(job) => openDrilldown('job', job.id, { title: `${job.source} / ${job.job_type}`, metadata: job as unknown as Record<string, unknown> })} />;
       case 'explorer':
         return (
           <PostsExplorer
@@ -742,7 +769,7 @@ export function App() {
           />
         );
       case 'engagement':
-        return <EngagementPage engagement={engagement} />;
+        return <EngagementPage engagement={engagement} onDrilldown={(kind, id, fallback) => openDrilldown(kind, id, fallback)} />;
       case 'platforms':
         return (
           <PlatformPage
@@ -818,7 +845,6 @@ function DemoAssistant({
   onClose,
   onStepChange,
   onOpen,
-  t,
 }: {
   open: boolean;
   step: number;
@@ -826,8 +852,8 @@ function DemoAssistant({
   onClose: () => void;
   onStepChange: (step: number, page: PageKey) => void;
   onOpen: () => void;
-  t: (key: string) => string;
 }) {
+  const { t } = useTranslation();
   useEffect(() => {
     document.querySelectorAll('.tour-target-active').forEach((item) => item.classList.remove('tour-target-active'));
     if (open) {
@@ -848,6 +874,9 @@ function DemoAssistant({
   }
   const current = tourSteps[step];
   const isLast = step === tourSteps.length - 1;
+  const title = t(`assistant.steps.${current.i18nKey}Title`);
+  const body = t(`assistant.steps.${current.i18nKey}Body`);
+  const bullets = t(`assistant.steps.${current.i18nKey}Bullets`, { returnObjects: true }) as unknown as string[];
   return (
     <>
       <div className="tour-highlight" data-active-target={current.target} />
@@ -855,17 +884,17 @@ function DemoAssistant({
         <div className="assistant-header">
           <div>
             <p className="eyebrow">{t('assistant.title')}</p>
-            <h2>{current.title[language]}</h2>
+            <h2>{title}</h2>
           </div>
           <button className="icon-button" type="button" onClick={onClose} aria-label="Close assistant">
             <X size={16} />
           </button>
         </div>
-        <p>{current.body[language]}</p>
+        <p>{body}</p>
         <ul>
-          {current.bullets[language].map((item) => <li key={item}>{item}</li>)}
+          {bullets.map((item) => <li key={item}>{item}</li>)}
         </ul>
-        <div className="assistant-target">Target: {current.target}</div>
+        <div className="assistant-target">{t('assistant.target')}: {current.target}</div>
         <div className="assistant-actions">
           <button type="button" onClick={() => onStepChange(Math.max(step - 1, 0), tourSteps[Math.max(step - 1, 0)].page)} disabled={step === 0}>{t('assistant.prev')}</button>
           <button type="button" onClick={onClose}>{t('assistant.skip')}</button>
@@ -932,23 +961,23 @@ function InsightDrawer({
           <X size={17} />
         </button>
       </div>
-      {loading && <div className="loading-strip">Loading drilldown...</div>}
+      {loading && <div className="loading-strip">{t('detail.loading')}</div>}
       <div className="drawer-body">
         <div className="metadata-status">
           <strong>{t('metadata.status')} / Metadata</strong>
           <span>{insight.metadata_status ?? 'available'}</span>
           <small>Fields: {(insight.available_fields ?? []).join(', ') || '-'}</small>
         </div>
-        <InsightSection title="Summary" payload={insight.summary} />
-        <InsightSection title="Metadata" payload={insight.metadata} />
+        <InsightSection title={String(t('common.summary'))} payload={insight.summary} />
+        <InsightSection title={String(t('common.metadata'))} payload={insight.metadata} />
         {insight.quality_flags.length > 0 && (
           <div className="detail-section">
-            <strong>Quality Flags</strong>
+            <strong>{t('common.qualityFlags')}</strong>
             <TagList items={insight.quality_flags} tone="danger" />
           </div>
         )}
         <div className="detail-section">
-          <strong>Related Posts</strong>
+          <strong>{t('common.relatedPosts')}</strong>
           <DataTable
             columns={relatedPostColumns}
             data={insight.related_posts}
@@ -956,7 +985,7 @@ function InsightDrawer({
           />
         </div>
         <div className="detail-section">
-          <strong>Related Crawl Jobs</strong>
+          <strong>{t('common.relatedJobs')}</strong>
           <DataTable
             columns={relatedJobColumns}
             data={insight.related_jobs}
@@ -964,7 +993,7 @@ function InsightDrawer({
           />
         </div>
         <div className="detail-section">
-          <strong>Raw Payload</strong>
+          <strong>{t('common.rawPayload')}</strong>
           <pre className="json-panel">{JSON.stringify(insight.raw_payload, null, 2)}</pre>
         </div>
       </div>
@@ -973,6 +1002,7 @@ function InsightDrawer({
 }
 
 function InsightSection({ title, payload }: { title: string; payload: Record<string, unknown> }) {
+  const { t } = useTranslation();
   return (
     <div className="detail-section">
       <strong>{title}</strong>
@@ -982,9 +1012,145 @@ function InsightSection({ title, payload }: { title: string; payload: Record<str
             <strong>{key}</strong>
             <span>{formatValue(value)}</span>
           </div>
-        )) : <div className="empty-state">No metadata.</div>}
+        )) : <div className="empty-state">{t('common.noMetadata')}</div>}
       </div>
     </div>
+  );
+}
+
+function DetailPage() {
+  const navigate = useNavigate();
+  const routeLocation = useLocation();
+  const { t } = useTranslation();
+  const state = routeLocation.state as { fallback?: Partial<DrilldownResponse>; from?: string } | null;
+  const [, , kind = '', encodedId = ''] = routeLocation.pathname.split('/');
+  const id = decodeURIComponent(encodedId);
+  const decodedKind = decodeURIComponent(kind);
+  const fallback = state?.fallback;
+  const [detail, setDetail] = useState<DrilldownResponse | null>(
+    fallback
+      ? {
+          kind: decodedKind,
+          id,
+          title: fallback.title ?? `${decodedKind}:${id}`,
+          subtitle: fallback.subtitle ?? '',
+          summary: fallback.summary ?? {},
+          metadata: fallback.metadata ?? {},
+          related_posts: fallback.related_posts ?? [],
+          related_jobs: fallback.related_jobs ?? [],
+          quality_flags: fallback.quality_flags ?? [],
+          raw_payload: fallback.raw_payload ?? {},
+          metadata_status: fallback.metadata_status,
+          available_fields: fallback.available_fields,
+          missing_fields: fallback.missing_fields,
+        }
+      : null,
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    api.analytics.drilldown({ kind: decodedKind, id })
+      .then((response) => {
+        if (active) {
+          setDetail(response);
+        }
+      })
+      .catch((err: Error) => {
+        if (active) {
+          setError(err.message);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [decodedKind, id]);
+
+  if (!detail && loading) {
+    return <div className="panel"><div className="loading-strip">{t('detail.loading')}</div></div>;
+  }
+  if (!detail) {
+    return <div className="panel"><div className="empty-state">{error ?? t('detail.notFound')}</div></div>;
+  }
+
+  const relatedPostColumns = columnsForRows(detail.related_posts);
+  const relatedJobColumns = columnsForRows(detail.related_jobs);
+  const sourceUrl = String(detail.metadata.url ?? detail.metadata.canonical_url ?? detail.raw_payload.url ?? '');
+
+  return (
+    <section className="detail-page">
+      <div className="panel wide-panel detail-hero">
+        <div>
+          <p className="eyebrow">{detail.kind} / {detail.id}</p>
+          <h2>{detail.title}</h2>
+          <span>{detail.subtitle}</span>
+        </div>
+        <div className="detail-actions">
+          <button className="demo-toggle" type="button" onClick={() => navigate(state?.from ?? pagePaths.overview)}>
+            {t('detail.backToWorkbench')}
+          </button>
+          {sourceUrl && (
+            <a className="primary-action" href={sourceUrl} target="_blank" rel="noreferrer">
+              <FileText size={16} />
+              {t('detail.sourceUrl')}
+            </a>
+          )}
+        </div>
+      </div>
+
+      {loading && <div className="loading-strip">{t('detail.loading')}</div>}
+      {error && <div className="endpoint-matrix"><button className="endpoint-error" type="button">{error}</button></div>}
+
+      <div className="detail-grid">
+        <div className="panel">
+          <div className="metadata-status">
+            <strong>{t('metadata.status')} / Metadata</strong>
+            <span>{detail.metadata_status ?? 'available'}</span>
+            <small>{t('common.fields')}: {(detail.available_fields ?? []).join(', ') || '-'}</small>
+          </div>
+          <InsightSection title={String(t('common.summary'))} payload={detail.summary} />
+        </div>
+        <div className="panel">
+          <InsightSection title={String(t('common.metadata'))} payload={detail.metadata} />
+        </div>
+        {detail.quality_flags.length > 0 && (
+          <div className="panel">
+            <div className="detail-section">
+              <strong>{t('common.qualityFlags')}</strong>
+              <TagList items={detail.quality_flags} tone="danger" />
+            </div>
+          </div>
+        )}
+        <div className="panel wide-panel">
+          <div className="panel-header"><h2>{t('common.relatedPosts')}</h2></div>
+          <DataTable
+            columns={relatedPostColumns}
+            data={detail.related_posts}
+            onRowSelect={(row) => row.id && navigate(`/detail/post/${encodeURIComponent(String(row.id))}`, { state: { from: routeLocation.pathname } })}
+          />
+        </div>
+        <div className="panel wide-panel">
+          <div className="panel-header"><h2>{t('common.relatedJobs')}</h2></div>
+          <DataTable
+            columns={relatedJobColumns}
+            data={detail.related_jobs}
+            onRowSelect={(row) => row.id && navigate(`/detail/job/${encodeURIComponent(String(row.id))}`, { state: { from: routeLocation.pathname } })}
+          />
+        </div>
+        <div className="panel wide-panel">
+          <div className="panel-header"><h2>{t('common.rawPayload')}</h2></div>
+          <pre className="json-panel">{JSON.stringify(detail.raw_payload, null, 2)}</pre>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -995,20 +1161,12 @@ function InterviewDemoGuide({
   activePage: PageKey;
   story: DemoStoryAnalytics | null;
 }) {
-  const pageMessage: Partial<Record<PageKey, string>> = {
-    overview: 'Start here: KPI cards prove the crawler stores enough normalized data to analyze trends.',
-    demo: 'Walk an interviewer through the full public-data workflow from source selection to Excel export.',
-    architecture: 'Use this map to explain how connectors, crawler core, SQLite, API, UI, and Excel reports fit together.',
-    workflow: 'Click each pipeline node to show governance, inputs, outputs, failure modes, and compliance strategy.',
-    lifecycle: 'Use this lineage story to trace one article from raw response to analytics and Excel output.',
-    quality: 'Show that blocked requests and data quality problems are treated as measurable pipeline facts.',
-    reports: 'Close the demo by showing how analytics become reproducible Excel deliverables.',
-  };
+  const { t } = useTranslation();
   return (
     <div className="demo-guide">
       <div>
-        <p className="eyebrow">Interview demo mode</p>
-        <strong>{pageMessage[activePage] ?? 'Use this page to discuss the data engineering capability behind the UI.'}</strong>
+        <p className="eyebrow">{t('demo.mode')}</p>
+        <strong>{t(`demo.guide.${activePage}`, { defaultValue: t('demo.guide.fallback') })}</strong>
       </div>
       <div className="demo-guide-metrics">
         <span>{story?.kpis.total_posts ?? 0} posts</span>
@@ -1028,19 +1186,20 @@ function DemoWalkthroughPage({
   onRunDemo: () => void;
   running: boolean;
 }) {
+  const { t } = useTranslation();
   const [selectedStep, setSelectedStep] = useState<DemoStoryStep | null>(null);
   const activeStep = selectedStep ?? story?.walkthrough_steps[0] ?? null;
   return (
     <section className="story-layout" data-tour="demo-workflow">
       <div className="panel wide-panel story-hero">
         <div>
-          <p className="eyebrow">guided portfolio demo</p>
-          <h2>{story?.title ?? 'Taiwan Public Web Intelligence Workbench'}</h2>
-          <p>{story?.subtitle ?? 'Crawler governance, normalization, analytics, and Excel reporting in one workflow.'}</p>
+          <p className="eyebrow">{t('demo.eyebrow')}</p>
+          <h2>{story?.title ?? t('demo.fallbackTitle')}</h2>
+          <p>{story?.subtitle ?? t('demo.fallbackSubtitle')}</p>
         </div>
         <button className="primary-action large-action" type="button" onClick={onRunDemo} disabled={running}>
           <PlayCircle size={18} />
-          {running ? 'Generating dataset...' : 'Run demo workflow'}
+          {running ? t('demo.generating') : t('demo.runWorkflow')}
         </button>
       </div>
 
@@ -1064,8 +1223,8 @@ function DemoWalkthroughPage({
 
       <div className="panel wide-panel">
         <div className="panel-header">
-          <h2>Engineering Capabilities Shown</h2>
-          <span className="pill">interview talking points</span>
+          <h2>{t('demo.capabilities')}</h2>
+          <span className="pill">{t('demo.talkingPoints')}</span>
         </div>
         <div className="highlight-grid">
           {(story?.interview_highlights ?? []).map((highlight) => (
@@ -1081,8 +1240,9 @@ function DemoWalkthroughPage({
 }
 
 function StoryStepDetail({ step }: { step: DemoStoryStep | null }) {
+  const { t } = useTranslation();
   if (!step) {
-    return <div className="panel"><div className="empty-state">Run or load demo story data.</div></div>;
+    return <div className="panel"><div className="empty-state">{t('demo.emptyStory')}</div></div>;
   }
   return (
     <aside className="panel story-detail-panel">
@@ -1092,19 +1252,19 @@ function StoryStepDetail({ step }: { step: DemoStoryStep | null }) {
       </div>
       <p className="detail-purpose">{step.purpose}</p>
       <div className="detail-section">
-        <strong>Inputs</strong>
+        <strong>{t('demo.inputs')}</strong>
         <TagList items={step.inputs} />
       </div>
       <div className="detail-section">
-        <strong>Outputs</strong>
+        <strong>{t('demo.outputs')}</strong>
         <TagList items={step.outputs} />
       </div>
       <div className="detail-section">
-        <strong>Tables / Artifacts</strong>
+        <strong>{t('demo.artifacts')}</strong>
         <TagList items={[...step.tables, step.artifact ?? 'runtime diagnostics']} />
       </div>
       <div className="detail-section">
-        <strong>Possible Failure Modes</strong>
+        <strong>{t('demo.failures')}</strong>
         <TagList items={step.failure_modes} tone="danger" />
       </div>
       <div className="compliance-callout">
@@ -1125,18 +1285,19 @@ function ArchitectureMapPage({
   story: DemoStoryAnalytics | null;
   onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="page-grid analytics-grid">
       <div className="wide-panel" data-tour="architecture-map">
-        <StoryGraphPanel graph={graph} title="System Architecture Map" onDrilldown={onDrilldown} />
+        <StoryGraphPanel graph={graph} title={String(t('architecture.map'))} onDrilldown={onDrilldown} />
       </div>
       <aside className="panel wide-panel">
-        <div className="panel-header"><h2>Architecture Narrative</h2></div>
+        <div className="panel-header"><h2>{t('architecture.narrative')}</h2></div>
         <div className="metadata-list">
-          <div className="metadata-row"><strong>Sources</strong><span>Public forums, RSS feeds, sitemap targets, and API-first connectors.</span></div>
-          <div className="metadata-row"><strong>Crawler Core</strong><span>Rate limit, robots guard, request budget, retry, policy errors, and provenance.</span></div>
-          <div className="metadata-row"><strong>Storage</strong><span>SQLite tables preserve source, job, normalized post, metrics, and export lineage.</span></div>
-          <div className="metadata-row"><strong>Presentation</strong><span>FastAPI serves analytics payloads into React charts and Excel exports.</span></div>
+          <div className="metadata-row"><strong>Sources</strong><span>{t('architecture.sources')}</span></div>
+          <div className="metadata-row"><strong>Crawler Core</strong><span>{t('architecture.core')}</span></div>
+          <div className="metadata-row"><strong>Storage</strong><span>{t('architecture.storage')}</span></div>
+          <div className="metadata-row"><strong>Presentation</strong><span>{t('architecture.presentation')}</span></div>
         </div>
         <div className="demo-guide-metrics vertical">
           <span>{story?.kpis.total_sources ?? 0} sources</span>
@@ -1157,22 +1318,23 @@ function LifecycleStoryPage({
   story: DemoStoryAnalytics | null;
   onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="page-grid analytics-grid">
       <div className="wide-panel">
-        <StoryGraphPanel graph={graph} title="Raw Data to Excel Lineage" onDrilldown={onDrilldown} />
+        <StoryGraphPanel graph={graph} title={String(t('lifecycle.title'))} onDrilldown={onDrilldown} />
       </div>
       <div className="panel">
-        <div className="panel-header"><h2>Lifecycle Explanation</h2></div>
+        <div className="panel-header"><h2>{t('lifecycle.explanation')}</h2></div>
         <div className="metadata-list">
-          <div className="metadata-row"><strong>Raw response</strong><span>Public JSON, RSS XML, or HTML fetched with provenance.</span></div>
-          <div className="metadata-row"><strong>Parsed item</strong><span>Connector extracts title, content, date, board, URL, and metrics.</span></div>
-          <div className="metadata-row"><strong>Normalized post</strong><span>Cross-platform schema enables one analytics pipeline.</span></div>
-          <div className="metadata-row"><strong>Analysis output</strong><span>Keyword, quality, engagement, trend, and Excel report artifacts.</span></div>
+          <div className="metadata-row"><strong>Raw response</strong><span>{t('lifecycle.raw')}</span></div>
+          <div className="metadata-row"><strong>Parsed item</strong><span>{t('lifecycle.parsed')}</span></div>
+          <div className="metadata-row"><strong>Normalized post</strong><span>{t('lifecycle.normalized')}</span></div>
+          <div className="metadata-row"><strong>Analysis output</strong><span>{t('lifecycle.output')}</span></div>
         </div>
       </div>
       <div className="panel">
-        <div className="panel-header"><h2>Demo Data Mix</h2></div>
+        <div className="panel-header"><h2>{t('lifecycle.mix')}</h2></div>
         <div className="ratio-meter">
           <div style={{ width: `${story?.demo_live_ratio.total ? (story.demo_live_ratio.demo / story.demo_live_ratio.total) * 100 : 0}%` }} />
         </div>
@@ -1194,6 +1356,7 @@ function StoryGraphPanel({
   title: string;
   onDrilldown?: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
+  const { t } = useTranslation();
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const nodes = (graph?.nodes ?? []).map((node) => ({
     id: node.id,
@@ -1208,7 +1371,7 @@ function StoryGraphPanel({
       <div className="panel flow-panel story-flow-panel">
         <div className="panel-header">
           <h2>{title}</h2>
-          <span className="pill">click nodes</span>
+          <span className="pill">{t('common.clickVisual')}</span>
         </div>
         <ReactFlow
           nodeTypes={graphNodeTypes}
@@ -1229,7 +1392,7 @@ function StoryGraphPanel({
           <Background />
         </ReactFlow>
       </div>
-      <NodeDetailPanel node={selectedNode ?? (graph?.nodes[0] ?? null)} title="Selected Node" />
+      <NodeDetailPanel node={selectedNode ?? (graph?.nodes[0] ?? null)} title={String(t('workflow.selectedNode'))} />
     </div>
   );
 }
@@ -1243,21 +1406,22 @@ function OverviewDashboard({
   jobs: CrawlJobResponse[];
   onDrilldown: (kind: string, id: string | number, fallback?: Partial<DrilldownResponse>) => void;
 }) {
+  const { t } = useTranslation();
   const areaData = pivotSeries(dashboard?.daily_platform_volume ?? [], 'platform');
   const platforms = uniqueGroups(dashboard?.daily_platform_volume ?? [], 'platform');
   const ratio = dashboard?.demo_live_ratio ?? { demo: 0, live: 0, total: 0 };
   const topPostColumns: ColumnDef<Record<string, unknown>>[] = [
-    { accessorKey: 'platform', header: 'Platform' },
-    { accessorKey: 'title', header: 'Title' },
+    { accessorKey: 'platform', header: String(t('common.platform')) },
+    { accessorKey: 'title', header: String(t('common.title')) },
     { accessorKey: 'engagement_score', header: 'Score' },
-    { accessorKey: 'comment_count', header: 'Comments' },
+    { accessorKey: 'comment_count', header: String(t('common.comments')) },
   ];
 
   return (
     <section className="page-grid analytics-grid">
-      <button className="panel wide-panel interactive-panel" type="button" onClick={() => onDrilldown('kpi', 'daily_platform_volume', { title: 'Daily Platform Volume', raw_payload: { rows: dashboard?.daily_platform_volume ?? [] } })}>
+      <button className="panel wide-panel interactive-panel" type="button" onClick={() => onDrilldown('kpi', 'daily_platform_volume', { title: String(t('overview.dailyVolume')), raw_payload: { rows: dashboard?.daily_platform_volume ?? [] } })}>
         <div className="panel-header">
-          <h2>Daily Platform Volume</h2>
+          <h2>{t('overview.dailyVolume')}</h2>
           <span className="pill">stacked area</span>
         </div>
         <ResponsiveContainer width="100%" height={300}>
@@ -1281,9 +1445,9 @@ function OverviewDashboard({
         </ResponsiveContainer>
       </button>
 
-      <button className="panel interactive-panel" type="button" onClick={() => onDrilldown('kpi', 'platform_distribution', { title: 'Platform Distribution', raw_payload: { rows: dashboard?.platform_distribution ?? [] } })}>
+      <button className="panel interactive-panel" type="button" onClick={() => onDrilldown('kpi', 'platform_distribution', { title: String(t('overview.platformDistribution')), raw_payload: { rows: dashboard?.platform_distribution ?? [] } })}>
         <div className="panel-header">
-          <h2>Platform Distribution</h2>
+          <h2>{t('overview.platformDistribution')}</h2>
         </div>
         <ResponsiveContainer width="100%" height={260}>
           <PieChart>
@@ -1304,23 +1468,23 @@ function OverviewDashboard({
         </ResponsiveContainer>
       </button>
 
-      <button className="panel interactive-panel" type="button" onClick={() => onDrilldown('kpi', 'demo_live_ratio', { title: 'Demo / Live Ratio', summary: ratio })}>
+      <button className="panel interactive-panel" type="button" onClick={() => onDrilldown('kpi', 'demo_live_ratio', { title: String(t('overview.demoLiveRatio')), summary: ratio })}>
         <div className="panel-header">
-          <h2>Demo / Live Ratio</h2>
+          <h2>{t('overview.demoLiveRatio')}</h2>
         </div>
         <div className="ratio-meter">
           <div style={{ width: `${ratio.total ? (ratio.demo / ratio.total) * 100 : 0}%` }} />
         </div>
         <div className="metadata-list">
-          <div className="metadata-row"><strong>Demo records</strong><span>{ratio.demo}</span></div>
-          <div className="metadata-row"><strong>Live records</strong><span>{ratio.live}</span></div>
-          <div className="metadata-row"><strong>Total records</strong><span>{ratio.total}</span></div>
+          <div className="metadata-row"><strong>{t('overview.demoRecords')}</strong><span>{ratio.demo}</span></div>
+          <div className="metadata-row"><strong>{t('overview.liveRecords')}</strong><span>{ratio.live}</span></div>
+          <div className="metadata-row"><strong>{t('overview.totalRecords')}</strong><span>{ratio.total}</span></div>
         </div>
       </button>
 
-      <button className="panel interactive-panel" type="button" onClick={() => onDrilldown('kpi', 'crawl_status_counts', { title: 'Crawl Outcome', raw_payload: { rows: dashboard?.crawl_status_counts ?? [] } })}>
+      <button className="panel interactive-panel" type="button" onClick={() => onDrilldown('kpi', 'crawl_status_counts', { title: String(t('overview.crawlOutcome')), raw_payload: { rows: dashboard?.crawl_status_counts ?? [] } })}>
         <div className="panel-header">
-          <h2>Crawl Outcome</h2>
+          <h2>{t('overview.crawlOutcome')}</h2>
         </div>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={dashboard?.crawl_status_counts ?? []} layout="vertical">
@@ -1332,9 +1496,9 @@ function OverviewDashboard({
         </ResponsiveContainer>
       </button>
 
-      <button className="panel interactive-panel" type="button" onClick={() => onDrilldown('keyword', dashboard?.top_keywords?.[0]?.keyword ?? 'AI', { title: 'Top Keywords', raw_payload: { rows: dashboard?.top_keywords ?? [] } })}>
+      <button className="panel interactive-panel" type="button" onClick={() => onDrilldown('keyword', dashboard?.top_keywords?.[0]?.keyword ?? 'AI', { title: String(t('overview.topKeywords')), raw_payload: { rows: dashboard?.top_keywords ?? [] } })}>
         <div className="panel-header">
-          <h2>Top Keywords</h2>
+          <h2>{t('overview.topKeywords')}</h2>
         </div>
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={dashboard?.top_keywords ?? []} layout="vertical">
@@ -1348,7 +1512,7 @@ function OverviewDashboard({
 
       <div className="panel wide-panel">
         <div className="panel-header">
-          <h2>Latest Hot Posts</h2>
+          <h2>{t('overview.latestHotPosts')}</h2>
         </div>
         <DataTable
           columns={topPostColumns}
@@ -1362,7 +1526,7 @@ function OverviewDashboard({
 
       <div className="panel wide-panel">
         <div className="panel-header">
-          <h2>Recent Crawl Timeline</h2>
+          <h2>{t('overview.recentTimeline')}</h2>
         </div>
         <div className="job-list">
           {jobs.slice(0, 8).map((job) => (
@@ -1391,6 +1555,7 @@ function SourceRegistry({
   summary: DashboardSummary | null;
   onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="page-grid">
       <SourceOverview
@@ -1404,27 +1569,27 @@ function SourceRegistry({
       />
       <div className="panel">
         <div className="panel-header">
-          <h2>Catalog Summary</h2>
+          <h2>{t('source.catalogSummary')}</h2>
         </div>
         <div className="metadata-list">
           <div className="metadata-row">
-            <strong>Configured Sources</strong>
+            <strong>{t('source.configured')}</strong>
             <span>{catalog.length}</span>
           </div>
           <div className="metadata-row">
-            <strong>Enabled Sources</strong>
+            <strong>{t('source.enabled')}</strong>
             <span>{catalog.filter((source) => source.enabled).length}</span>
           </div>
           <div className="metadata-row">
-            <strong>Database-backed</strong>
+            <strong>{t('source.databaseBacked')}</strong>
             <span>{catalog.filter((source) => source.database_backed).length}</span>
           </div>
         </div>
       </div>
       <div className="panel wide-panel">
         <div className="panel-header">
-          <h2>Source Catalog</h2>
-          <span className="pill">YAML-driven batch crawl targets</span>
+          <h2>{t('source.catalog')}</h2>
+          <span className="pill">{t('source.yamlTargets')}</span>
         </div>
         <div className="catalog-grid">
           {catalog.map((source) => (
@@ -1465,6 +1630,7 @@ function WorkflowPage({
   crawlFlow: CrawlFlowAnalytics | null;
   onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
+  const { t } = useTranslation();
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const nodes = (crawlFlow?.nodes ?? []).map((node) => ({
     ...node,
@@ -1477,8 +1643,8 @@ function WorkflowPage({
     <section className="flow-layout">
       <div className="panel flow-panel" data-tour="workflow-graph">
         <div className="panel-header">
-          <h2>Crawler Pipeline Graph</h2>
-          {workflow?.latest_error && <span className="pill">latest stop condition captured</span>}
+          <h2>{t('workflow.graph')}</h2>
+          {workflow?.latest_error && <span className="pill">{t('workflow.latestStop')}</span>}
         </div>
         <ReactFlow
           nodeTypes={graphNodeTypes}
@@ -1499,7 +1665,7 @@ function WorkflowPage({
           <Background />
         </ReactFlow>
       </div>
-      <NodeDetailPanel node={selectedNode ?? (crawlFlow?.nodes?.[0] ?? null)} title="Pipeline Node Detail" />
+      <NodeDetailPanel node={selectedNode ?? (crawlFlow?.nodes?.[0] ?? null)} title={String(t('workflow.nodeDetail'))} />
     </section>
   );
 }
@@ -1511,13 +1677,14 @@ function TrendPage({
   trends: TrendAnalytics | null;
   timeSeries: TimeSeriesAnalytics | null;
 }) {
+  const { t } = useTranslation();
   const sourceData = pivotSeries(timeSeries?.daily_by_source ?? [], 'source');
   const sources = uniqueGroups(timeSeries?.daily_by_source ?? [], 'source').slice(0, 6);
   return (
     <section className="page-grid">
       <div className="panel wide-panel">
         <div className="panel-header">
-          <h2>Daily Trend</h2>
+          <h2>{t('trends.daily')}</h2>
         </div>
         <ResponsiveContainer width="100%" height={320}>
           <LineChart data={compressDailyTrends(trends?.daily_post_count ?? [])}>
@@ -1530,7 +1697,7 @@ function TrendPage({
         </ResponsiveContainer>
       </div>
       <div className="panel wide-panel">
-        <div className="panel-header"><h2>Source Trend</h2></div>
+        <div className="panel-header"><h2>{t('trends.source')}</h2></div>
         <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={sourceData}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -1543,7 +1710,7 @@ function TrendPage({
           </AreaChart>
         </ResponsiveContainer>
       </div>
-      <SimpleList title="Top Boards / Forums" rows={(trends?.top_boards ?? []).map((item) => [item.board_or_forum, item.count])} />
+      <SimpleList title={String(t('trends.boards'))} rows={(trends?.top_boards ?? []).map((item) => [item.board_or_forum, item.count])} />
     </section>
   );
 }
@@ -1564,8 +1731,8 @@ function KeywordPage({
   const [selectedNode, setSelectedNode] = useState<Record<string, unknown> | null>(null);
   const heatmapMax = Math.max(...(heatmap?.cells ?? []).map((cell) => cell.count), 1);
   const phraseColumns: ColumnDef<Record<string, unknown>>[] = [
-    { accessorKey: 'keyword', header: 'Keyword' },
-    { accessorKey: 'count', header: 'Count' },
+    { accessorKey: 'keyword', header: String(t('common.keyword')) },
+    { accessorKey: 'count', header: String(t('common.count')) },
   ];
   const legend = Array.from(
     new Map((network?.nodes ?? []).map((node) => [node.group ?? 'Topic', node.color ?? '#64748b'])),
@@ -1585,7 +1752,7 @@ function KeywordPage({
         </ResponsiveContainer>
       </div>
       <div className="panel network-panel" data-tour="keyword-network">
-        <div className="panel-header"><h2>{t('keyword.network')}</h2><span className="pill">colored topic groups</span></div>
+        <div className="panel-header"><h2>{t('keyword.network')}</h2><span className="pill">{t('keyword.groups')}</span></div>
         <div className="network-legend" aria-label={t('network.legend')}>
           {legend.map(([group, color]) => (
             <span key={group}><i style={{ background: color }} />{group}</span>
@@ -1655,7 +1822,7 @@ function KeywordPage({
         </div>
       </div>
       <div className="panel">
-        <div className="panel-header"><h2>Top Phrase Table</h2></div>
+        <div className="panel-header"><h2>{t('keyword.phrases')}</h2></div>
         <DataTable
           columns={phraseColumns}
           data={(keywords?.keywords ?? []) as Array<Record<string, unknown>>}
@@ -1666,37 +1833,56 @@ function KeywordPage({
         />
       </div>
       <div className="panel">
-        <div className="panel-header"><h2>Selected Keyword Node</h2></div>
-        {selectedNode ? <pre className="json-panel">{JSON.stringify(selectedNode, null, 2)}</pre> : <div className="empty-state">Click a network node.</div>}
+        <div className="panel-header"><h2>{t('keyword.selected')}</h2></div>
+        {selectedNode ? <pre className="json-panel">{JSON.stringify(selectedNode, null, 2)}</pre> : <div className="empty-state">{t('common.clickNode')}</div>}
       </div>
     </section>
   );
 }
 
-function EngagementPage({ engagement }: { engagement: EngagementAnalytics | null }) {
+function EngagementPage({
+  engagement,
+  onDrilldown,
+}: {
+  engagement: EngagementAnalytics | null;
+  onDrilldown: (kind: string, id: string | number, fallback?: Partial<DrilldownResponse>) => void;
+}) {
+  const { t } = useTranslation();
   return (
     <section className="page-grid">
+      <div className="panel wide-panel">
+        <div className="panel-header"><h2>{t('engagement.distribution')}</h2></div>
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={(engagement?.top_posts ?? []).slice(0, 12)}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="platform" />
+            <YAxis allowDecimals={false} />
+            <Tooltip />
+            <Bar dataKey="engagement_score" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
       <SimpleList
-        title="Average Score by Platform"
+        title={String(t('engagement.average'))}
         rows={(engagement?.average_score_by_platform ?? []).map((item) => [item.platform, item.average_engagement_score])}
       />
       <SimpleList
-        title="Missing Metrics"
+        title={String(t('engagement.missing'))}
         rows={Object.entries(engagement?.missing_metrics ?? {})}
       />
       <div className="panel wide-panel">
         <div className="panel-header">
-          <h2>Top Engagement Posts</h2>
+          <h2>{t('engagement.topPosts')}</h2>
         </div>
         <div className="ranked-list">
           {(engagement?.top_posts ?? []).slice(0, 12).map((post) => (
-            <div className="ranked-row" key={post.id}>
+            <button className="ranked-row interactive-row" type="button" key={post.id} onClick={() => onDrilldown('post', post.id, { title: post.title, metadata: post as unknown as Record<string, unknown> })}>
               <div>
                 <strong>{post.title}</strong>
                 <span>{post.platform} / comments {post.comment_count} / likes {post.like_count}</span>
               </div>
               <b>{post.engagement_score}</b>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -1713,6 +1899,7 @@ function PlatformPage({
   sourceHealth: SourceHealthAnalytics | null;
   onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
+  const { t } = useTranslation();
   const platformRows = platforms?.platforms ?? [];
   const radarData = platformRows.map((row) => ({
     platform: row.platform,
@@ -1722,8 +1909,8 @@ function PlatformPage({
     success: row.crawl_success_rate ?? 0,
   }));
   const sourceColumns: ColumnDef<Record<string, unknown>>[] = [
-    { accessorKey: 'display_name', header: 'Source' },
-    { accessorKey: 'platform', header: 'Platform' },
+    { accessorKey: 'display_name', header: String(t('common.source')) },
+    { accessorKey: 'platform', header: String(t('common.platform')) },
     { accessorKey: 'post_count', header: 'Posts' },
     { accessorKey: 'success_rate', header: 'Success %' },
     { accessorKey: 'failed_count', header: 'Failed' },
@@ -1733,7 +1920,7 @@ function PlatformPage({
   return (
     <section className="page-grid analytics-grid">
       <div className="panel">
-        <div className="panel-header"><h2>Platform Volume</h2></div>
+        <div className="panel-header"><h2>{t('platform.volume')}</h2></div>
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={platformRows}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -1745,7 +1932,7 @@ function PlatformPage({
         </ResponsiveContainer>
       </div>
       <div className="panel">
-        <div className="panel-header"><h2>Schema Normalization Radar</h2></div>
+        <div className="panel-header"><h2>{t('platform.radar')}</h2></div>
         <ResponsiveContainer width="100%" height={280}>
           <RadarChart data={radarData}>
             <PolarGrid />
@@ -1757,7 +1944,7 @@ function PlatformPage({
         </ResponsiveContainer>
       </div>
       <div className="panel">
-        <div className="panel-header"><h2>Average Content Length</h2></div>
+        <div className="panel-header"><h2>{t('platform.contentLength')}</h2></div>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={platformRows}>
             <XAxis dataKey="platform" />
@@ -1768,7 +1955,7 @@ function PlatformPage({
         </ResponsiveContainer>
       </div>
       <div className="panel">
-        <div className="panel-header"><h2>Crawl Success Rate</h2></div>
+        <div className="panel-header"><h2>{t('platform.successRate')}</h2></div>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={platformRows}>
             <XAxis dataKey="platform" />
@@ -1779,7 +1966,7 @@ function PlatformPage({
         </ResponsiveContainer>
       </div>
       <div className="panel wide-panel">
-        <div className="panel-header"><h2>Source Health Matrix</h2></div>
+        <div className="panel-header"><h2>{t('platform.health')}</h2></div>
         <DataTable
           columns={sourceColumns}
           data={(sourceHealth?.rows ?? []) as Array<Record<string, unknown>>}
@@ -1804,6 +1991,7 @@ function QualityPage({
   table: DataQualityTableAnalytics | null;
   onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
+  const { t } = useTranslation();
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [activeTable, setActiveTable] = useState<keyof DataQualityTableAnalytics>('missing_content');
   const lineageNodes = (lineage?.nodes ?? []).map((node, index) => ({
@@ -1820,7 +2008,7 @@ function QualityPage({
   return (
     <section className="page-grid analytics-grid">
       <div className="panel wide-panel flow-panel lineage-panel">
-        <div className="panel-header"><h2>Data Lineage Graph</h2></div>
+        <div className="panel-header"><h2>{t('quality.lineage')}</h2></div>
         <ReactFlow
           nodeTypes={graphNodeTypes}
           nodes={lineageNodes}
@@ -1839,11 +2027,11 @@ function QualityPage({
           <Background />
         </ReactFlow>
       </div>
-      <NodeDetailPanel node={selectedNode ?? (lineage?.nodes?.[0] ?? null)} title="Lineage Node Detail" />
-      <SimpleList title="Data Quality Checks" rows={(quality?.checks ?? []).map((item) => [item.name, item.count])} />
-      <SimpleList title="Policy Events" rows={(quality?.policy_events ?? []).map((item) => [item.category, item.count])} />
+      <NodeDetailPanel node={selectedNode ?? (lineage?.nodes?.[0] ?? null)} title={String(t('quality.nodeDetail'))} />
+      <SimpleList title={String(t('quality.checks'))} rows={(quality?.checks ?? []).map((item) => [item.name, item.count])} />
+      <SimpleList title={String(t('quality.policyEvents'))} rows={(quality?.policy_events ?? []).map((item) => [item.category, item.count])} />
       <div className="panel wide-panel">
-        <div className="panel-header"><h2>Quality Tables</h2></div>
+        <div className="panel-header"><h2>{t('quality.tables')}</h2></div>
         <div className="tab-row">
           {(['missing_content', 'duplicates', 'failed_crawls', 'policy_blocks'] as Array<keyof DataQualityTableAnalytics>).map((key) => (
             <button key={key} className={activeTable === key ? 'active' : ''} type="button" onClick={() => setActiveTable(key)}>{key}</button>
@@ -1913,7 +2101,7 @@ function ReportsCenter({
           {['Summary', 'Raw Data', 'Daily Trend', 'Keyword Matches', 'Top Posts', 'Platform Comparison', 'Data Quality', 'Crawl Runs'].map((sheet) => (
             <div className="metadata-row" key={sheet}>
               <strong>{sheet}</strong>
-              <span>ready for export-excel-report pipeline</span>
+              <span>{t('reports.ready')}</span>
             </div>
           ))}
         </div>
@@ -1967,7 +2155,7 @@ function CompliancePage({
           ))}
         </div>
       </div>
-      <SimpleList title="Stop Conditions" rows={(quality?.policy_events ?? []).map((item) => [item.category, item.count])} />
+      <SimpleList title={String(t('compliance.stopConditions'))} rows={(quality?.policy_events ?? []).map((item) => [item.category, item.count])} />
       <div className="panel wide-panel">
         <div className="panel-header">
           <h2>{t('compliance.outcomes')}</h2>
@@ -1997,26 +2185,27 @@ function CompliancePage({
 }
 
 function SettingsPage({ status }: { status: string }) {
+  const { t } = useTranslation();
   return (
     <section className="page-grid">
       <div className="panel">
         <div className="panel-header">
-          <h2>Backend</h2>
+          <h2>{t('settings.backend')}</h2>
         </div>
         <div className="metadata-list">
           <div className="metadata-row">
-            <strong>API Status</strong>
+            <strong>{t('settings.apiStatus')}</strong>
             <span>{status}</span>
           </div>
           <div className="metadata-row">
-            <strong>Default API Base URL</strong>
+            <strong>{t('settings.apiBase')}</strong>
             <span>http://127.0.0.1:8000</span>
           </div>
         </div>
       </div>
       <div className="panel">
         <div className="panel-header">
-          <h2>Portfolio Commands</h2>
+          <h2>{t('settings.commands')}</h2>
         </div>
         <code className="command-block">dcard-crawler seed-demo-data --rows 2000 --reset-demo</code>
         <code className="command-block">dcard-crawler export-excel-report --output data/exports/analysis_report.xlsx</code>
@@ -2034,13 +2223,14 @@ function DataTable({
   data: Array<Record<string, unknown>>;
   onRowSelect?: (row: Record<string, unknown>) => void;
 }) {
+  const { t } = useTranslation();
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
   if (!data.length) {
-    return <div className="empty-state">No table rows.</div>;
+    return <div className="empty-state">{t('common.noRows')}</div>;
   }
   return (
     <div className="table-wrap">
@@ -2075,6 +2265,7 @@ function DataTable({
 }
 
 function NodeDetailPanel({ node, title }: { node: GraphNode | null; title: string }) {
+  const { t } = useTranslation();
   const payload = node?.data ?? node ?? {};
   return (
     <aside className="panel node-detail-panel">
@@ -2089,7 +2280,7 @@ function NodeDetailPanel({ node, title }: { node: GraphNode | null; title: strin
           ))}
         </div>
       ) : (
-        <div className="empty-state">Click a node.</div>
+        <div className="empty-state">{t('common.clickNode')}</div>
       )}
     </aside>
   );
@@ -2104,6 +2295,7 @@ function TagList({ items, tone = 'default' }: { items: string[]; tone?: 'default
 }
 
 function SimpleList({ title, rows }: { title: string; rows: Array<[string, number | string]> }) {
+  const { t } = useTranslation();
   return (
     <div className="panel">
       <div className="panel-header">
@@ -2115,13 +2307,14 @@ function SimpleList({ title, rows }: { title: string; rows: Array<[string, numbe
             <strong>{label}</strong>
             <span>{value}</span>
           </div>
-        )) : <div className="empty-state">No data yet.</div>}
+        )) : <div className="empty-state">{t('common.noData')}</div>}
       </div>
     </div>
   );
 }
 
 function PostDrawer({ post, onClose }: { post: PostResponse; onClose: () => void }) {
+  const { t } = useTranslation();
   return (
     <aside className="drawer" aria-label="Post detail">
       <div className="drawer-header">
@@ -2134,18 +2327,18 @@ function PostDrawer({ post, onClose }: { post: PostResponse; onClose: () => void
         </button>
       </div>
       <div className="drawer-body">
-        <p>{post.content || post.excerpt || 'No content captured.'}</p>
+        <p>{post.content || post.excerpt || t('detail.noContent')}</p>
         <div className="metadata-list">
-          <div className="metadata-row"><strong>Source</strong><span>{post.source}</span></div>
-          <div className="metadata-row"><strong>External ID</strong><span>{post.external_id}</span></div>
-          <div className="metadata-row"><strong>Published</strong><span>{post.published_at ?? '-'}</span></div>
-          <div className="metadata-row"><strong>Comments</strong><span>{post.comment_count}</span></div>
-          <div className="metadata-row"><strong>Likes</strong><span>{post.like_count}</span></div>
-          <div className="metadata-row"><strong>Views</strong><span>{post.view_count}</span></div>
-          <div className="metadata-row"><strong>Content Hash</strong><span>{post.content_hash ?? '-'}</span></div>
+          <div className="metadata-row"><strong>{t('common.source')}</strong><span>{post.source}</span></div>
+          <div className="metadata-row"><strong>{t('detail.externalId')}</strong><span>{post.external_id}</span></div>
+          <div className="metadata-row"><strong>{t('common.published')}</strong><span>{post.published_at ?? '-'}</span></div>
+          <div className="metadata-row"><strong>{t('common.comments')}</strong><span>{post.comment_count}</span></div>
+          <div className="metadata-row"><strong>{t('detail.likes')}</strong><span>{post.like_count}</span></div>
+          <div className="metadata-row"><strong>{t('detail.views')}</strong><span>{post.view_count}</span></div>
+          <div className="metadata-row"><strong>{t('detail.contentHash')}</strong><span>{post.content_hash ?? '-'}</span></div>
           <div className="metadata-row"><strong>URL</strong><span>{post.url ?? '-'}</span></div>
         </div>
-        {post.url && <a className="external-link" href={post.url} target="_blank" rel="noreferrer"><FileText size={16} /> Open source URL</a>}
+        {post.url && <a className="external-link" href={post.url} target="_blank" rel="noreferrer"><FileText size={16} /> {t('detail.sourceUrl')}</a>}
       </div>
     </aside>
   );

@@ -1,4 +1,5 @@
 import { Activity, Database, FileText, RadioTower } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { DashboardSummary } from '../api/types';
 
 type SummaryCardsProps = {
@@ -7,12 +8,13 @@ type SummaryCardsProps = {
 };
 
 export function SummaryCards({ summary, onSelectMetric }: SummaryCardsProps) {
+  const { t } = useTranslation();
   const counts = summary?.counts ?? {};
   const cards = [
-    { key: 'total_sources', label: 'Sources', value: counts.sources ?? 0, icon: Database },
-    { key: 'total_posts', label: 'Posts', value: counts.posts ?? 0, icon: FileText },
-    { key: 'total_crawl_runs', label: 'Crawl Jobs', value: counts.crawl_jobs ?? 0, icon: Activity },
-    { key: 'api_health', label: 'API Health', value: summary?.health.database_ready ? 'Ready' : 'Schema needed', icon: RadioTower },
+    { key: 'total_sources', label: t('metrics.total_sources'), value: counts.sources ?? 0, icon: Database },
+    { key: 'total_posts', label: t('metrics.total_posts'), value: counts.posts ?? 0, icon: FileText },
+    { key: 'total_crawl_runs', label: t('metrics.total_crawl_runs'), value: counts.crawl_jobs ?? 0, icon: Activity },
+    { key: 'api_health', label: t('metrics.api_health'), value: summary?.health.database_ready ? t('common.ready') : t('metrics.schema_needed'), icon: RadioTower },
   ];
 
   return (
