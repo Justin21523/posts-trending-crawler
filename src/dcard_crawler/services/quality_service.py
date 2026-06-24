@@ -27,6 +27,12 @@ class QualityService:
         if not post.post_id:
             issues.append("post_id is missing")
 
+        if not post.external_id:
+            issues.append("external_id is missing")
+
+        if not post.platform:
+            issues.append("platform is missing")
+
         # Check content quality
         if not post.content and not post.excerpt:
             issues.append("both content and excerpt are empty")

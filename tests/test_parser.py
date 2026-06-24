@@ -27,6 +27,9 @@ class TestPostParser:
 
         assert isinstance(result, NormalizedPost)
         assert result.post_id == 12345
+        assert result.platform == "dcard"
+        assert result.external_id == "12345"
+        assert result.board_or_forum == "trending"
         assert result.forum_alias == "trending"
         assert result.title == "Test Post Title"
         assert result.excerpt == "Test excerpt content"
@@ -34,6 +37,7 @@ class TestPostParser:
         assert result.url == "https://www.dcard.tw/f/trending/p/12345"
         assert result.topics == [{"name": "news", "id": 1}]
         assert result.crawl_source == "api"
+        assert result.content_hash is not None
 
     def test_normalize_detail(self):
         """Test normalizing a post from detail endpoint."""
@@ -62,6 +66,8 @@ class TestPostParser:
 
         assert isinstance(result, NormalizedPost)
         assert result.post_id == 12345
+        assert result.external_id == "12345"
+        assert result.platform == "dcard"
         assert result.content == "Full post content here"
         assert result.forum_alias == "trending"
         assert result.forum_name == "時事板"

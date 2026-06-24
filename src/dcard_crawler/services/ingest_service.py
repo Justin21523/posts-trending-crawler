@@ -7,7 +7,9 @@ from loguru import logger
 
 from dcard_crawler.clients.api_client import DcardAPIClient
 from dcard_crawler.parsers.post_parser import PostParser
+from dcard_crawler.repositories.crawl_job_repository import CrawlJobRepository
 from dcard_crawler.repositories.post_repository import PostRepository
+from dcard_crawler.repositories.source_repository import SourceRepository
 from dcard_crawler.schemas import Checkpoint
 from dcard_crawler.services.checkpoint_service import CheckpointService
 from dcard_crawler.services.quality_service import QualityService
@@ -24,12 +26,16 @@ class IngestService:
         parser: PostParser,
         quality_service: QualityService,
         checkpoint_service: CheckpointService,
+        source_repository: SourceRepository | None = None,
+        crawl_job_repository: CrawlJobRepository | None = None,
     ):
         self.api_client = api_client
         self.repository = repository
         self.parser = parser
         self.quality_service = quality_service
         self.checkpoint_service = checkpoint_service
+        self.source_repository = source_repository or SourceRepository()
+        self.crawl_job_repository = crawl_job_repository or CrawlJobRepository()
 
     async def crawl_posts(
         self,
@@ -52,6 +58,18 @@ class IngestService:
             Summary dict with crawl statistics
         """
         logger.info(f"Starting crawl: forum={forum_alias} popular={popular} max_posts={max_posts}")
+        source_id = self.source_repository.get_or_create(
+            name="dcard",
+            source_type="forum",
+            base_url="https://www.dcard.tw",
+            robots_url="https://www.dcard.tw/robots.txt",
+        )
+        target_url = f"https://www.dcard.tw/f/{forum_alias}"
+        job_id = self.crawl_job_repository.start(
+            source_id=source_id,
+            job_type="dcard_posts",
+            target_url=target_url,
+        )
 
         # Load checkpoint if resuming
         checkpoint = None
@@ -114,7 +132,7 @@ class IngestService:
                 for post_item in posts:
                     try:
                         # Skip if already exists
-                        if self.repository.exists(post_item.id):
+                        if self.repository.exists(post_item.id, source_id=source_id):
                             logger.debug(f"Post {post_item.id} already exists, skipping")
                             stats["posts_skipped"] += 1
                             total_fetched += 1
@@ -122,6 +140,7 @@ class IngestService:
 
                         # Normalize and validate
                         normalized = self.parser.normalize_list_item(post_item, forum_alias)
+                        normalized.source_id = source_id
                         is_valid, issues = self.quality_service.validate(normalized)
 
                         if not is_valid:
@@ -160,6 +179,7 @@ class IngestService:
                                     normalized_detail = (
                                         self.parser.normalize_detail(detail)
                                     )
+                                    normalized_detail.source_id = source_id
                                     is_valid, issues = (
                                         self.quality_service.validate(
                                             normalized_detail
@@ -215,6 +235,20 @@ class IngestService:
                     popular_mode=popular,
                 )
                 self.checkpoint_service.save(final_checkpoint)
+
+            if stats["errors"]:
+                self.crawl_job_repository.fail(
+                    job_id=job_id,
+                    error_message=f"Completed with {stats['errors']} errors",
+                    request_count=stats["posts_listed"] + stats["posts_detailed"],
+                    item_count=stats["posts_stored"],
+                )
+            else:
+                self.crawl_job_repository.finish(
+                    job_id=job_id,
+                    request_count=stats["posts_listed"] + stats["posts_detailed"],
+                    item_count=stats["posts_stored"],
+                )
 
         logger.info(f"Crawl completed: {stats}")
         return stats

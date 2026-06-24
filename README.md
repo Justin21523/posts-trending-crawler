@@ -1,11 +1,11 @@
 # Dcard Trending Crawler
 
-A production-style crawler system for collecting public posts from Dcard's trending forum. Built with an API-first approach, using Playwright only as a fallback for endpoint discovery.
+A production-style crawler system for collecting public posts from Dcard's trending forum. Built with an API-first approach, using Playwright only for public page rendering and endpoint discovery.
 
 ## Features
 
 - **API-First Crawling**: Uses Dcard's public JSON API endpoints for efficient data collection
-- **Browser Fallback**: Playwright-based endpoint discovery when API structure changes
+- **Browser Discovery**: Playwright-based endpoint discovery when API structure changes
 - **Resume Support**: Checkpoint-based resume to continue from last successful position
 - **Data Quality**: Validation layer for detecting empty content, duplicates, and malformed records
 - **Rate Limiting**: Built-in throttling to avoid overwhelming the target server
@@ -17,7 +17,8 @@ A production-style crawler system for collecting public posts from Dcard's trend
 
 ```bash
 # Install dependencies
-pip install -e .
+conda activate data_env
+pip install -e ".[dev,analysis]"
 
 # Install Playwright browsers
 playwright install chromium
@@ -105,10 +106,10 @@ dcard-crawler export --format csv --output posts.csv
 - Uses `/posts/{id}` for details
 - Fast, efficient, production-ready
 
-**Mode B: Browser-Assisted (Fallback)**
+**Mode B: Browser-Assisted Discovery**
 - Playwright monitors network requests
 - Discovers actual API endpoints in use
-- Extracts post data when API mode fails
+- Stops when pages require login, CAPTCHA, challenge pages, or other access controls
 
 ### Project Structure
 
@@ -156,20 +157,20 @@ Edit `configs/crawler.yaml` to customize:
 
 ## Data Schema
 
-Each post stores:
-- `post_id`: Unique identifier
-- `forum_alias`, `forum_name`: Forum information
-- `title`, `excerpt`, `content`: Post content
-- `created_at`, `updated_at`: Timestamps
-- `like_count`, `comment_count`: Engagement metrics
-- `topics`: Post topics/tags
-- `media_meta`: Media attachments metadata
-- `school`, `department`: Author info (if public)
-- `anonymous_*`: Anonymity flags
-- `url`: Post URL
-- `crawl_source`: Source (api/browser)
-- `crawled_at`: When the post was crawled
-- `raw_json`: Original API response
+The SQLite schema is designed for multiple public data platforms:
+
+- `sources`: public data source metadata such as Dcard, PTT, RSS, or sitemap sources
+- `crawl_jobs`: crawl run provenance, status, counts, and error messages
+- `posts`: normalized public posts/articles keyed by `source_id + external_id`
+- `post_metrics`: time-series engagement metrics captured for a post
+
+`posts` keeps Dcard compatibility fields such as `post_id`, `forum_alias`,
+`forum_name`, `topics`, and `media_meta`, while adding cross-platform fields such
+as `platform`, `board_or_forum`, `canonical_url`, `published_at`, `content_hash`,
+`view_count`, and `share_count`.
+
+For local development, use `dcard-crawler init --reset` after schema changes to
+recreate the SQLite database.
 
 ## Development
 
@@ -189,9 +190,14 @@ ruff check src/ tests/
 - This crawler only collects **public posts** from public forums
 - **No comments** are collected
 - **No login automation** or authentication bypass
-- **No anti-captcha** or stealth mechanisms
+- **No CAPTCHA, Turnstile, or reCAPTCHA bypass**
+- **No stealth browser fingerprint spoofing**
+- **No saved-cookie, token, or browser-profile reuse for crawling**
+- **No proxy rotation or IP reputation evasion**
+- **No scraping of robots.txt-disallowed paths**
 - Built-in rate limiting to be respectful
-- Follows Dcard's `robots.txt` guidelines
+- When a site returns 403, 429, CAPTCHA, Cloudflare challenge, login wall, or robots disallow,
+  the crawler must stop, fail closed, or slow down. It must not attempt to bypass the block.
 
 ## License
 

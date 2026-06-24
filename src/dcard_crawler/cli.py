@@ -8,7 +8,7 @@ import typer
 
 from dcard_crawler.clients.api_client import DcardAPIClient
 from dcard_crawler.clients.browser_client import BrowserClient
-from dcard_crawler.database import init_db
+from dcard_crawler.database import init_db, is_current_schema
 from dcard_crawler.parsers.post_parser import PostParser
 from dcard_crawler.repositories.post_repository import PostRepository
 from dcard_crawler.services.checkpoint_service import CheckpointService
@@ -23,11 +23,29 @@ app = typer.Typer(
 )
 
 
+def _require_current_schema() -> bool:
+    """Return False and print a user-facing hint when DB schema is stale."""
+    if is_current_schema():
+        return True
+    typer.echo("✗ Database schema is not initialized for the current models.")
+    typer.echo("  For local/dev use, run: dcard-crawler init --reset")
+    return False
+
+
 @app.command()
-def init():
+def init(
+    reset: bool = typer.Option(
+        False,
+        "--reset",
+        help="Drop and recreate all SQLite tables. Use only for local/dev databases.",
+    ),
+):
     """Initialize database and required directories."""
-    typer.echo("Initializing database...")
-    init_db()
+    if reset:
+        typer.echo("Resetting database schema...")
+    else:
+        typer.echo("Initializing database...")
+    init_db(reset=reset)
 
     # Ensure directories exist
     Path("data").mkdir(exist_ok=True)
@@ -117,6 +135,9 @@ def crawl_list(
     ),
 ):
     """Crawl post listing and store basic post data."""
+    if not _require_current_schema():
+        raise typer.Exit(1)
+
     typer.echo(f"Starting crawl list: forum={forum} popular={popular} max_posts={max_posts}")
 
     async def _run():
@@ -181,6 +202,9 @@ def crawl_posts(
     ),
 ):
     """Crawl posts with full details (listing + detail API)."""
+    if not _require_current_schema():
+        raise typer.Exit(1)
+
     typer.echo(f"Starting full post crawl: forum={forum} popular={popular} max_posts={max_posts}")
 
     async def _run():
@@ -225,9 +249,12 @@ def status():
     from sqlalchemy import func, select
 
     from dcard_crawler.database import get_session
-    from dcard_crawler.models import Post
+    from dcard_crawler.models import Post, Source
 
     typer.echo("Crawl Status\n")
+
+    if not _require_current_schema():
+        return
 
     # Database stats
     with get_session() as session:
@@ -242,6 +269,17 @@ def status():
 
             if min_created and max_created:
                 typer.echo(f"  Date range: {min_created} to {max_created}")
+
+            source_rows = session.execute(
+                select(Source.name, Post.platform, func.count(Post.id))
+                .join(Source, Source.id == Post.source_id)
+                .group_by(Source.name, Post.platform)
+                .order_by(Source.name, Post.platform)
+            ).all()
+            if source_rows:
+                typer.echo("\n  Sources:")
+                for source_name, platform, count in source_rows:
+                    typer.echo(f"    {source_name} / {platform}: {count}")
         else:
             typer.echo("  No posts in database yet.")
 
@@ -283,7 +321,10 @@ def export(
     from sqlalchemy import select
 
     from dcard_crawler.database import get_session
-    from dcard_crawler.models import Post
+    from dcard_crawler.models import Post, Source
+
+    if not _require_current_schema():
+        raise typer.Exit(1)
 
     output = output.replace("{format}", format)
     output_path = Path(output)
@@ -292,22 +333,27 @@ def export(
     typer.echo(f"Exporting posts to {output_path} (format={format}, limit={limit})")
 
     with get_session() as session:
-        query = select(Post).order_by(Post.post_id.desc())
+        query = select(Post, Source.name).join(Source, Source.id == Post.source_id).order_by(
+            Post.crawled_at.desc()
+        )
         if limit:
             query = query.limit(limit)
 
-        posts = session.execute(query).scalars().all()
+        rows = session.execute(query).all()
 
-        if not posts:
+        if not rows:
             typer.echo("⚠ No posts to export")
             return
 
-        typer.echo(f"Exporting {len(posts)} posts...")
+        typer.echo(f"Exporting {len(rows)} posts...")
 
         if format == "jsonl":
             with open(output_path, "w") as f:
-                for post in posts:
+                for post, source_name in rows:
                     record = {
+                        "source": source_name,
+                        "platform": post.platform,
+                        "external_id": post.external_id,
                         "post_id": post.post_id,
                         "forum_alias": post.forum_alias,
                         "title": post.title,
@@ -322,12 +368,16 @@ def export(
             import csv
             with open(output_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=[
+                    "source", "platform", "external_id",
                     "post_id", "forum_alias", "title", "content",
                     "created_at", "like_count", "comment_count", "url"
                 ])
                 writer.writeheader()
-                for post in posts:
+                for post, source_name in rows:
                     writer.writerow({
+                        "source": source_name,
+                        "platform": post.platform,
+                        "external_id": post.external_id,
                         "post_id": post.post_id,
                         "forum_alias": post.forum_alias,
                         "title": post.title,

@@ -40,16 +40,26 @@ class PostDetail(PostListItem):
 class NormalizedPost(BaseModel):
     """Normalized post ready for storage."""
 
+    source_id: int | None = None
+    source_name: str = "dcard"
+    source_type: str = "forum"
+    platform: str = "dcard"
+    external_id: str | None = None
     post_id: int
     forum_alias: str | None = None
     forum_name: str | None = None
+    board_or_forum: str | None = None
     title: str
+    author_display: str | None = None
     excerpt: str = ""
     content: str = ""
+    published_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
     like_count: int = 0
     comment_count: int = 0
+    share_count: int = 0
+    view_count: int = 0
     topics: list[dict[str, Any]] = Field(default_factory=list)
     media_meta: list[dict[str, Any]] = Field(default_factory=list)
     school: str | None = None
@@ -60,9 +70,22 @@ class NormalizedPost(BaseModel):
     with_nickname: bool = False
     nsfw: bool = False
     url: str | None = None
+    canonical_url: str | None = None
     crawl_source: str = "api"
     crawled_at: datetime = Field(default_factory=datetime.now)
     raw_json: dict[str, Any] = Field(default_factory=dict)
+    raw_html_path: str | None = None
+    content_hash: str | None = None
+    language: str | None = "zh-TW"
+
+    def model_post_init(self, __context: Any) -> None:
+        """Fill compatibility defaults after validation."""
+        if self.external_id is None:
+            self.external_id = str(self.post_id)
+        if self.board_or_forum is None:
+            self.board_or_forum = self.forum_alias
+        if self.published_at is None:
+            self.published_at = self.created_at
 
 
 class Checkpoint(BaseModel):

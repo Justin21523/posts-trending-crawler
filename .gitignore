@@ -1,0 +1,54 @@
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Local environments and editor files
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+.idea/
+.vscode/
+
+# Runtime data and generated outputs
+data/
+logs/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Browser profiles, cookies, and local session state must never be committed.
+browser_profile/
+**/browser_profile/
+**/Cookies
+**/Cookies-journal
+**/Login Data
+**/Login Data-journal
+**/History
+**/History-journal
+**/Web Data
+**/Web Data-journal
+**/Local State
+**/Preferences
+**/Secure Preferences
+**/Network Persistent State
+**/verified_cookies*.json
+**/.captcha_ready
+
+# Analysis/export products
+exports/
+*.jsonl
+*.xlsx
+*.csv

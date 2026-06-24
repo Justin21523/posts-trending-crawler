@@ -16,15 +16,14 @@
 - Dcard appears to detect and block headless browsers
 
 ### Conclusion
-Dcard has active anti-bot protection. The previously documented API endpoints from community research (2023-2024) may have changed or now require additional headers/cookies.
+Dcard has active anti-bot protection. The previously documented API endpoints from community research (2023-2024) may have changed or may be blocked for automated requests from this environment.
 
 ## Next Steps Options
 
-1. **Use non-headless browser**: Run Playwright with `headless=False` on a real display
-2. **Add more browser fingerprinting**: Use playwright-stealth or add more realistic headers
-3. **Check if access works from different network**: Current environment may be blocked by IP
-4. **Manual investigation**: Visit Dcard trending in real browser, check DevTools Network tab for actual API calls
-5. **Use cached/archived data**: If real-time crawling is blocked, use previously collected datasets
+1. **Fail closed on 403/challenge pages**: Record the reason and stop instead of retrying aggressively.
+2. **Use public endpoint discovery only**: Playwright may observe public page network requests, but must not use stealth, saved cookies, or login state.
+3. **Prefer stable public sources where available**: Use RSS, sitemap, or official public endpoints for future multi-source connectors.
+4. **Use cached/archived sample data only when it is lawful and public**: Keep samples small and reproducible.
 
 ## Files Generated
 - `data/raw/poc_listing_sample.json` - Not generated (API blocked)

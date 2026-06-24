@@ -1,5 +1,6 @@
 """HTTP client for Dcard API endpoints with rate limiting and retry logic."""
 
+import asyncio
 import time
 
 import httpx
@@ -57,7 +58,7 @@ class DcardAPIClient:
         if elapsed < min_interval:
             wait_time = min_interval - elapsed
             logger.debug(f"Rate limiting: waiting {wait_time:.2f}s")
-            await httpx.AsyncClient().sleep(wait_time)
+            await asyncio.sleep(wait_time)
         self._last_request_time = time.time()
 
     @retry(

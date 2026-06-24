@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 
 
-async def test_listing_api():
+async def check_listing_api():
     """Test forum listing endpoint."""
     url = "https://api.dcard.tw/service/api/v2/forums/trending/posts"
     params = {"popular": "false", "limit": 5}
@@ -60,7 +60,7 @@ async def test_listing_api():
             return False
 
 
-async def test_detail_api(post_id: int):
+async def check_detail_api(post_id: int):
     """Test post detail endpoint."""
     url = f"https://api.dcard.tw/service/api/v2/posts/{post_id}"
 
@@ -103,7 +103,7 @@ async def main():
     print("=" * 60)
 
     # Test listing
-    listing_ok = await test_listing_api()
+    listing_ok = await check_listing_api()
 
     if listing_ok:
         # Get a post ID from the sample
@@ -113,7 +113,7 @@ async def main():
                 data = json.load(f)
             if data:
                 post_id = data[0]["id"]
-                await test_detail_api(post_id)
+                await check_detail_api(post_id)
 
     print("\n" + "=" * 60)
     print("PoC Complete")
