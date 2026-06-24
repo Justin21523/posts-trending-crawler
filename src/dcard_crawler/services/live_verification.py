@@ -13,6 +13,7 @@ from dcard_crawler.database import get_session
 from dcard_crawler.models import Post, Source
 from dcard_crawler.repositories.crawl_job_repository import CrawlJobRepository
 from dcard_crawler.services.connector_ingest_service import ConnectorIngestService
+from dcard_crawler.services.dcard_diagnostics import DcardEndpointDiagnosticsService
 from dcard_crawler.services.ingest_service import IngestService
 
 
@@ -120,10 +121,12 @@ class LiveVerificationService:
         report_dir: str | Path = "data/reports/crawl_runs",
         quality_gate: DataQualityGate | None = None,
         crawl_jobs: CrawlJobRepository | None = None,
+        dcard_diagnostics: DcardEndpointDiagnosticsService | None = None,
     ):
         self.report_dir = Path(report_dir)
         self.quality_gate = quality_gate or DataQualityGate()
         self.crawl_jobs = crawl_jobs or CrawlJobRepository()
+        self.dcard_diagnostics = dcard_diagnostics or DcardEndpointDiagnosticsService()
 
     async def verify_dcard(
         self,
@@ -142,12 +145,16 @@ class LiveVerificationService:
                 fetch_details=True,
                 resume=False,
             )
+            diagnostics = None
+            if stats.get("status") == "failed":
+                diagnostics = await self.dcard_diagnostics.diagnose(forum=forum)
             return self._build_and_write_report(
                 platform="dcard",
                 source_name="dcard",
                 target=forum,
                 stats=stats,
                 attempted_items=int(stats.get("posts_listed", 0)),
+                metadata={"dcard_diagnostics": diagnostics} if diagnostics else None,
             )
         finally:
             await service.close()
@@ -163,6 +170,7 @@ class LiveVerificationService:
         max_posts: int = 5,
         source_base_url: str | None = None,
         robots_url: str | None = None,
+        metadata: dict[str, Any] | None = None,
         **listing_kwargs,
     ) -> dict[str, Any]:
         """Run a small connector verification crawl."""
@@ -182,6 +190,7 @@ class LiveVerificationService:
                 target=target.url,
                 stats=stats,
                 attempted_items=int(stats.get("items_listed", 0)),
+                metadata=metadata,
             )
         finally:
             await service.close()
@@ -194,6 +203,7 @@ class LiveVerificationService:
         target: str,
         stats: dict[str, Any],
         attempted_items: int,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         posts = self._recent_posts(
             source_name=source_name,
@@ -213,6 +223,7 @@ class LiveVerificationService:
             "stats": stats,
             "quality": quality,
             "samples": samples,
+            "metadata": metadata or {},
         }
 
         if stats.get("status") == "completed" and quality["status"] in {"warning", "failed"}:

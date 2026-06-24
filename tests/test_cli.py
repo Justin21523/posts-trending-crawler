@@ -59,11 +59,37 @@ class FakeNewsIngestService(FakeIngestService):
 
 
 class FakeLiveVerificationService:
+    calls = []
+
     async def verify_dcard(self, service, **kwargs):
         return fake_verify_report("dcard")
 
     async def verify_connector(self, service, **kwargs):
+        self.calls.append(kwargs)
         return fake_verify_report(kwargs["platform"])
+
+
+class FakeDcardDiagnosticsService:
+    async def diagnose(self, **kwargs):
+        return {
+            "forum": kwargs["forum"],
+            "summary": {"endpoint_count": 2, "blocked_count": 1},
+            "endpoints": [
+                {
+                    "name": "forum_page",
+                    "status_code": 200,
+                    "policy_category": "unknown",
+                    "policy_reason": "allowed",
+                },
+                {
+                    "name": "forum_posts_api",
+                    "status_code": 403,
+                    "policy_category": "forbidden",
+                    "policy_reason": "http_403_forbidden",
+                },
+            ],
+            "report_path": "data/reports/diagnostics/dcard_fake.json",
+        }
 
 
 def fake_verify_report(platform):
@@ -253,6 +279,7 @@ def test_verify_live_help_commands_run():
     assert runner.invoke(app, ["verify-live-dcard", "--help"]).exit_code == 0
     assert runner.invoke(app, ["verify-live-ptt", "--help"]).exit_code == 0
     assert runner.invoke(app, ["verify-live-news-rss", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["diagnose-dcard-endpoints", "--help"]).exit_code == 0
 
 
 def test_verify_live_commands_use_verifier_without_live_network(tmp_path, monkeypatch):
@@ -267,14 +294,19 @@ def test_verify_live_commands_use_verifier_without_live_network(tmp_path, monkey
         "dcard_crawler.cli.build_news_ingest_service",
         lambda **kwargs: FakeNewsIngestService(),
     )
+    fake_verifier = FakeLiveVerificationService()
+    fake_verifier.calls = []
     monkeypatch.setattr(
         "dcard_crawler.services.live_verification.LiveVerificationService",
-        FakeLiveVerificationService,
+        lambda: fake_verifier,
     )
 
     runner = CliRunner()
     dcard_result = runner.invoke(app, ["verify-live-dcard", "--max-posts", "1"])
-    ptt_result = runner.invoke(app, ["verify-live-ptt", "--max-posts", "1"])
+    ptt_result = runner.invoke(
+        app,
+        ["verify-live-ptt", "--max-posts", "1", "--allow-robots-unavailable"],
+    )
     news_result = runner.invoke(app, ["verify-live-news-rss", "--max-articles", "1"])
 
     assert dcard_result.exit_code == 0
@@ -282,6 +314,21 @@ def test_verify_live_commands_use_verifier_without_live_network(tmp_path, monkey
     assert news_result.exit_code == 0
     assert "Live verification finished" in dcard_result.output
     assert "Quality: passed" in news_result.output
+    assert fake_verifier.calls[0]["metadata"]["robots_unavailable_policy_override"] is True
+
+
+def test_diagnose_dcard_endpoints_uses_diagnostics_service_without_live_network(monkeypatch):
+    monkeypatch.setattr(
+        "dcard_crawler.services.dcard_diagnostics.DcardEndpointDiagnosticsService",
+        FakeDcardDiagnosticsService,
+    )
+
+    result = CliRunner().invoke(app, ["diagnose-dcard-endpoints", "--forum", "trending"])
+
+    assert result.exit_code == 0
+    assert "Dcard diagnostics finished" in result.output
+    assert "forum_posts_api" in result.output
+    assert "http_403_forbidden" in result.output
 
 
 def test_status_shows_recent_crawl_jobs(tmp_path, monkeypatch):

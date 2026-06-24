@@ -23,6 +23,15 @@ def test_build_ptt_ingest_service():
     assert service.connector.name == "ptt"
 
 
+def test_build_ptt_ingest_service_can_allow_unavailable_robots():
+    service = build_ptt_ingest_service(
+        board="Stock",
+        robots_unavailable_policy="allow",
+    )
+
+    assert service.connector.http_client.robots_checker.unavailable_policy == "allow"
+
+
 def test_build_news_ingest_service():
     service = build_news_ingest_service(source_name="demo-news")
 

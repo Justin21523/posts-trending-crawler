@@ -167,6 +167,25 @@ Live verification is intentionally small and fail-closed. If a site returns
 robots disallow, 403, 429, CAPTCHA, Cloudflare challenge, or login wall, the
 run stops and records the reason instead of bypassing the control.
 
+For PTT, robots.txt may be unavailable. The default remains fail-closed. For a
+small public-board verification run, explicitly opt in:
+
+```bash
+dcard-crawler verify-live-ptt \
+    --board Stock \
+    --max-pages 1 \
+    --max-posts 5 \
+    --allow-robots-unavailable
+```
+
+For Dcard endpoint health checks, use diagnostics. This records status codes and
+policy classifications without trying to bypass 403, 429, login walls, or
+challenges.
+
+```bash
+dcard-crawler diagnose-dcard-endpoints --forum trending
+```
+
 ## Architecture
 
 ### Dual-Mode Design

@@ -497,6 +497,11 @@ def crawl_ptt(
         "--allow-over18-public-confirm",
         help="Use PTT public over18 confirmation flow for this session only",
     ),
+    allow_robots_unavailable: bool = typer.Option(
+        False,
+        "--allow-robots-unavailable",
+        help="Allow this PTT run when robots.txt is unavailable. Keeps low-volume limits.",
+    ),
 ):
     """Crawl public PTT board articles."""
     if not _require_current_schema():
@@ -508,6 +513,7 @@ def crawl_ptt(
         service = build_ptt_ingest_service(
             board=board,
             allow_over18_public_confirm=allow_over18_public_confirm,
+            robots_unavailable_policy="allow" if allow_robots_unavailable else None,
         )
         try:
             target = service.connector.board_target(board)
@@ -634,7 +640,44 @@ def _print_verify_report(report: dict) -> None:
         typer.echo("  Samples:")
         for sample in report["samples"][:3]:
             typer.echo(f"    - {sample['title']}")
+    diagnostics = report.get("metadata", {}).get("dcard_diagnostics")
+    if diagnostics:
+        typer.echo(f"  Diagnostics: {diagnostics['report_path']}")
     typer.echo(f"  Report: {report['report_path']}")
+
+
+def _print_dcard_diagnostics(report: dict) -> None:
+    """Print a concise Dcard diagnostics summary."""
+    typer.echo("\n✓ Dcard diagnostics finished")
+    typer.echo(f"  Forum: {report['forum']}")
+    typer.echo(f"  Endpoints checked: {report['summary']['endpoint_count']}")
+    typer.echo(f"  Blocked endpoints: {report['summary']['blocked_count']}")
+    for endpoint in report["endpoints"]:
+        typer.echo(
+            f"  - {endpoint['name']}: status={endpoint['status_code']} "
+            f"category={endpoint['policy_category']} reason={endpoint['policy_reason']}"
+        )
+    typer.echo(f"  Report: {report['report_path']}")
+
+
+@app.command("diagnose-dcard-endpoints")
+def diagnose_dcard_endpoints(
+    forum: str = typer.Option("trending", "--forum", "-f", help="Dcard forum alias"),
+    sample_post_id: int | None = typer.Option(
+        None,
+        "--sample-post-id",
+        help="Optional Dcard post ID for detail endpoint diagnostics",
+    ),
+):
+    """Diagnose Dcard public page/API endpoint status without bypassing blocks."""
+    from dcard_crawler.services.dcard_diagnostics import DcardEndpointDiagnosticsService
+
+    async def _run():
+        service = DcardEndpointDiagnosticsService()
+        report = await service.diagnose(forum=forum, sample_post_id=sample_post_id)
+        _print_dcard_diagnostics(report)
+
+    asyncio.run(_run())
 
 
 @app.command("verify-live-dcard")
@@ -696,6 +739,11 @@ def verify_live_ptt(
         "--allow-over18-public-confirm",
         help="Use PTT public over18 confirmation flow for this session only",
     ),
+    allow_robots_unavailable: bool = typer.Option(
+        False,
+        "--allow-robots-unavailable",
+        help="Allow this PTT verify run when robots.txt is unavailable.",
+    ),
 ):
     """Run a low-volume live PTT crawl verification."""
     from dcard_crawler.services.live_verification import LiveVerificationService
@@ -707,6 +755,7 @@ def verify_live_ptt(
         service = build_ptt_ingest_service(
             board=board,
             allow_over18_public_confirm=allow_over18_public_confirm,
+            robots_unavailable_policy="allow" if allow_robots_unavailable else None,
         )
         verifier = LiveVerificationService()
         report = await verifier.verify_connector(
@@ -718,6 +767,10 @@ def verify_live_ptt(
             max_posts=max_posts,
             source_base_url="https://www.ptt.cc",
             robots_url="https://www.ptt.cc/robots.txt",
+            metadata={
+                "robots_unavailable_policy_override": allow_robots_unavailable,
+                "robots_unavailable_policy": "allow" if allow_robots_unavailable else "block",
+            },
         )
         _print_verify_report(report)
 
@@ -837,6 +890,15 @@ def status(
                     f"requests={job.request_count} items={job.item_count} "
                     f"finished={finished}{error}{reason}"
                 )
+
+    report_paths = sorted(
+        Path("data/reports").glob("*/*.json"),
+        key=lambda path: path.stat().st_mtime,
+    )
+    if report_paths:
+        typer.echo("\n  Recent reports:")
+        for report_path in report_paths[-5:]:
+            typer.echo(f"    {report_path}")
 
     # Checkpoint status
     checkpoint_service = CheckpointService()
