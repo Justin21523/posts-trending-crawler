@@ -1,9 +1,9 @@
 """Crawler error types and classifications."""
 
-from enum import StrEnum
+from enum import Enum
 
 
-class ErrorCategory(StrEnum):
+class ErrorCategory(str, Enum):
     """High-level crawler error category."""
 
     TRANSIENT = "transient"
