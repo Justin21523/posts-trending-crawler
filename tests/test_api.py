@@ -22,6 +22,19 @@ class FakeControlService:
             reset_demo=kwargs.get("reset_demo", True),
         )
 
+    def generate_excel_report(self, **kwargs):
+        from dcard_crawler.analysis.excel_report import export_analysis_report
+
+        output_path = kwargs.get("output_path", "data/exports/test_report.xlsx")
+        tables = export_analysis_report(None, output_path, "configs/keywords.txt", None)
+        return {
+            "status": "completed",
+            "output_path": output_path,
+            "row_count": len(tables["Raw Data"]),
+            "keyword_match_count": len(tables["Keyword Matches"]),
+            "sheets": list(tables),
+        }
+
     async def verify_dcard(self, **kwargs):
         return fake_verify_report("dcard", "dcard")
 
@@ -284,3 +297,30 @@ def test_api_posts_search_and_drilldown(tmp_path, monkeypatch):
     assert source_drilldown.json()["summary"]["post_count"] > 0
     assert keyword_drilldown.json()["related_posts"]
     assert "http_403_forbidden" in workflow_drilldown.json()["quality_flags"]
+
+
+def test_api_compliance_excel_and_metadata_payloads(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
+    monkeypatch.chdir(tmp_path)
+    init_db(reset=True)
+    DemoSeedService(report_root=tmp_path / "data" / "reports").seed(rows=120, reset_demo=True)
+    client = TestClient(create_app(control_service=FakeControlService()))
+
+    network = client.get("/analytics/keyword-network")
+    compliance = client.get("/analytics/compliance-summary")
+    report = client.post("/reports/excel", params={"output": "data/exports/test_report.xlsx"})
+    drilldown = client.get(
+        "/analytics/drilldown",
+        params={"kind": "report", "id": "data/exports/test_report.xlsx"},
+    )
+
+    assert network.status_code == 200
+    assert {"category", "color", "metadata"}.issubset(network.json()["nodes"][0])
+    assert compliance.status_code == 200
+    assert compliance.json()["summary"]["source_count"] > 0
+    assert compliance.json()["governance_rules"]
+    assert report.status_code == 200
+    assert report.json()["status"] == "completed"
+    assert (tmp_path / "data" / "exports" / "test_report.xlsx").exists()
+    assert drilldown.json()["metadata_status"] == "available"
+    assert drilldown.json()["available_fields"]

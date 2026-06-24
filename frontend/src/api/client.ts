@@ -10,7 +10,9 @@ import type {
   DemoWorkflowRunResponse,
   DiagnosticsResponse,
   DrilldownResponse,
+  ComplianceSummary,
   EngagementAnalytics,
+  ExcelReportRunResponse,
   KeywordHeatmapAnalytics,
   HealthResponse,
   KeywordAnalytics,
@@ -110,9 +112,17 @@ export const api = {
     topPosts: () => request<{ rows: PostResponse[] | Array<Record<string, unknown>> }>('/analytics/top-posts'),
     dataQualityTable: () => request<DataQualityTableAnalytics>('/analytics/data-quality-table'),
     demoStory: () => request<DemoStoryAnalytics>('/analytics/demo-story'),
+    complianceSummary: () => request<ComplianceSummary>('/analytics/compliance-summary'),
     drilldown: (payload: { kind: string; id: string | number }) =>
       request<DrilldownResponse>(
         `/analytics/drilldown${queryString({ kind: payload.kind, id: payload.id })}`,
+      ),
+  },
+  reportsApi: {
+    generateExcel: (payload: { output?: string } = {}) =>
+      request<ExcelReportRunResponse>(
+        `/reports/excel${queryString({ output: payload.output ?? 'data/exports/analysis_report.xlsx' })}`,
+        { method: 'POST' },
       ),
   },
   demo: {

@@ -195,7 +195,17 @@ def create_app(
 
     @app.get("/analytics/drilldown")
     def analytics_drilldown(kind: str, id: str):
-        return queries.analytics_drilldown(kind=kind, item_id=id)
+        return queries.finalize_drilldown(queries.analytics_drilldown(kind=kind, item_id=id))
+
+    @app.get("/analytics/compliance-summary")
+    def analytics_compliance_summary():
+        return queries.analytics_compliance_summary()
+
+    @app.post("/reports/excel")
+    def generate_excel_report(
+        output: str = Query("data/exports/analysis_report.xlsx"),
+    ):
+        return controls.generate_excel_report(output_path=output)
 
     @app.get("/workflow/summary")
     def workflow_summary():

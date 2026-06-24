@@ -72,7 +72,9 @@ import type {
   DemoStoryStep,
   DiagnosticsResponse,
   DrilldownResponse,
+  ComplianceSummary,
   EngagementAnalytics,
+  ExcelReportRunResponse,
   GraphNode,
   KeywordHeatmapAnalytics,
   KeywordAnalytics,
@@ -117,30 +119,191 @@ type PageKey =
   | 'compliance'
   | 'settings';
 
-const pages: Array<{ key: PageKey; label: string; icon: typeof Activity }> = [
-  { key: 'overview', label: 'Overview Dashboard', icon: BarChart3 },
-  { key: 'demo', label: 'Demo Walkthrough', icon: PlayCircle },
-  { key: 'architecture', label: 'Architecture Map', icon: Network },
-  { key: 'sources', label: 'Source Registry', icon: Database },
-  { key: 'workflow', label: 'Crawler Workflow', icon: GitBranch },
-  { key: 'lifecycle', label: 'Data Lifecycle Story', icon: Route },
-  { key: 'runs', label: 'Crawl Runs', icon: Activity },
-  { key: 'explorer', label: 'Data Explorer', icon: Search },
-  { key: 'trends', label: 'Trend Analytics', icon: TrendingUp },
-  { key: 'keywords', label: 'Keyword & Topic Mining', icon: Sparkles },
-  { key: 'engagement', label: 'Engagement Analysis', icon: ClipboardCheck },
-  { key: 'platforms', label: 'Platform Comparison', icon: Layers },
-  { key: 'quality', label: 'Data Quality & Lineage', icon: BookOpenCheck },
-  { key: 'reports', label: 'Excel Report Center', icon: FileSpreadsheet },
-  { key: 'compliance', label: 'Compliance & Diagnostics', icon: ShieldCheck },
-  { key: 'settings', label: 'Settings', icon: Settings },
+type Language = 'zh' | 'en';
+
+const pages: Array<{ key: PageKey; labelKey: string; icon: typeof Activity }> = [
+  { key: 'overview', labelKey: 'page.overview', icon: BarChart3 },
+  { key: 'demo', labelKey: 'page.demo', icon: PlayCircle },
+  { key: 'architecture', labelKey: 'page.architecture', icon: Network },
+  { key: 'sources', labelKey: 'page.sources', icon: Database },
+  { key: 'workflow', labelKey: 'page.workflow', icon: GitBranch },
+  { key: 'lifecycle', labelKey: 'page.lifecycle', icon: Route },
+  { key: 'runs', labelKey: 'page.runs', icon: Activity },
+  { key: 'explorer', labelKey: 'page.explorer', icon: Search },
+  { key: 'trends', labelKey: 'page.trends', icon: TrendingUp },
+  { key: 'keywords', labelKey: 'page.keywords', icon: Sparkles },
+  { key: 'engagement', labelKey: 'page.engagement', icon: ClipboardCheck },
+  { key: 'platforms', labelKey: 'page.platforms', icon: Layers },
+  { key: 'quality', labelKey: 'page.quality', icon: BookOpenCheck },
+  { key: 'reports', labelKey: 'page.reports', icon: FileSpreadsheet },
+  { key: 'compliance', labelKey: 'page.compliance', icon: ShieldCheck },
+  { key: 'settings', labelKey: 'page.settings', icon: Settings },
 ];
 
 const chartColors = ['#2563eb', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#0891b2'];
 const graphNodeTypes = { enhanced: EnhancedFlowNode };
 
+const messages: Record<Language, Record<string, string>> = {
+  zh: {
+    'page.overview': '總覽儀表板',
+    'page.demo': 'Demo 操作導覽',
+    'page.architecture': '系統架構圖',
+    'page.sources': '資料來源管理',
+    'page.workflow': 'Crawler Workflow',
+    'page.lifecycle': '資料生命週期',
+    'page.runs': '爬取執行紀錄',
+    'page.explorer': '資料瀏覽器',
+    'page.trends': '趨勢分析',
+    'page.keywords': 'Keyword & Topic Mining',
+    'page.engagement': '互動熱度分析',
+    'page.platforms': '平台比較',
+    'page.quality': '資料品質與 Lineage',
+    'page.reports': 'Excel Report Center',
+    'page.compliance': 'Compliance & Diagnostics',
+    'page.settings': '設定',
+    'top.eyebrow': '公開資料 Pipeline 作品集',
+    'button.demoMode': 'Demo Mode',
+    'button.runDemo': '產生 Demo workflow',
+    'button.running': '執行中...',
+    'button.assistant': '開啟小幫手',
+    'assistant.title': '作品集導覽小幫手',
+    'assistant.start': '開始導覽',
+    'assistant.next': '下一步',
+    'assistant.prev': '上一步',
+    'assistant.skip': '略過',
+    'assistant.done': '完成',
+    'reports.generate': '產生 Excel 報表',
+    'reports.generating': '產生中...',
+    'reports.generator': 'Excel 報表產生器',
+    'reports.output': '輸出路徑',
+    'reports.rows': '資料筆數',
+    'reports.matches': '關鍵字命中',
+    'reports.sheets': 'Excel 報表 Sheets',
+    'compliance.summary': '合規治理總覽',
+    'compliance.outcomes': '近期合規結果',
+    'compliance.rules': '治理規則',
+    'keyword.frequency': '關鍵字頻率',
+    'keyword.network': 'Keyword 共現網路',
+    'keyword.heatmap': '平台 x 關鍵字熱力圖',
+    'network.legend': 'Keyword 分群圖例',
+    'metadata.status': 'Metadata 狀態',
+  },
+  en: {
+    'page.overview': 'Overview Dashboard',
+    'page.demo': 'Demo Walkthrough',
+    'page.architecture': 'Architecture Map',
+    'page.sources': 'Source Registry',
+    'page.workflow': 'Crawler Workflow',
+    'page.lifecycle': 'Data Lifecycle Story',
+    'page.runs': 'Crawl Runs',
+    'page.explorer': 'Data Explorer',
+    'page.trends': 'Trend Analytics',
+    'page.keywords': 'Keyword & Topic Mining',
+    'page.engagement': 'Engagement Analysis',
+    'page.platforms': 'Platform Comparison',
+    'page.quality': 'Data Quality & Lineage',
+    'page.reports': 'Excel Report Center',
+    'page.compliance': 'Compliance & Diagnostics',
+    'page.settings': 'Settings',
+    'top.eyebrow': 'Public data pipeline portfolio',
+    'button.demoMode': 'Demo Mode',
+    'button.runDemo': 'Run demo workflow',
+    'button.running': 'Running...',
+    'button.assistant': 'Open assistant',
+    'assistant.title': 'Portfolio Demo Assistant',
+    'assistant.start': 'Start tour',
+    'assistant.next': 'Next',
+    'assistant.prev': 'Back',
+    'assistant.skip': 'Skip',
+    'assistant.done': 'Done',
+    'reports.generate': 'Generate Excel Report',
+    'reports.generating': 'Generating...',
+    'reports.generator': 'Excel Report Generator',
+    'reports.output': 'Output',
+    'reports.rows': 'Rows',
+    'reports.matches': 'Keyword Matches',
+    'reports.sheets': 'Excel Report Sheets',
+    'compliance.summary': 'Crawler Governance Summary',
+    'compliance.outcomes': 'Recent Compliance Outcomes',
+    'compliance.rules': 'Governance Rules',
+    'keyword.frequency': 'Keyword Frequency',
+    'keyword.network': 'Keyword Co-occurrence Network',
+    'keyword.heatmap': 'Platform x Keyword Heatmap',
+    'network.legend': 'Keyword Group Legend',
+    'metadata.status': 'Metadata Status',
+  },
+};
+
+const tourSteps: Array<{
+  page: PageKey;
+  target: string;
+  title: Record<Language, string>;
+  body: Record<Language, string>;
+  bullets: Record<Language, string[]>;
+}> = [
+  {
+    page: 'overview',
+    target: 'overview-kpis',
+    title: { zh: '先看總覽 KPI', en: 'Start with overview KPIs' },
+    body: {
+      zh: '這裡快速展示資料來源、文章量、crawl jobs 與 API 狀態，讓面試官先理解系統規模。',
+      en: 'This shows source, post, crawl job, and API readiness at a glance.',
+    },
+    bullets: {
+      zh: ['點擊任一卡片可開啟 metadata drilldown', 'Demo data 與 live data 會被清楚標示'],
+      en: ['Click any card to open metadata drilldown', 'Demo and live data are clearly labeled'],
+    },
+  },
+  {
+    page: 'demo',
+    target: 'demo-workflow',
+    title: { zh: '執行展示資料流程', en: 'Run the demo workflow' },
+    body: {
+      zh: '這一步用可重現的 demo dataset 展示完整 pipeline，不依賴外部網站當下是否可抓。',
+      en: 'This uses a reproducible demo dataset to show the full pipeline.',
+    },
+    bullets: { zh: ['按 Run demo workflow', '資料會刷新到所有圖表'], en: ['Click Run demo workflow', 'Charts refresh after seeding'] },
+  },
+  {
+    page: 'architecture',
+    target: 'architecture-map',
+    title: { zh: '解釋系統架構', en: 'Explain the architecture' },
+    body: { zh: '用節點圖說明 Sources、Connectors、Crawler Core、SQLite、API、React 與 Excel Export。', en: 'Use the graph to explain sources, connectors, crawler core, SQLite, API, React, and Excel export.' },
+    bullets: { zh: ['點節點看 metadata', '強調 connector-based 架構'], en: ['Click nodes for metadata', 'Highlight connector-based design'] },
+  },
+  {
+    page: 'workflow',
+    target: 'workflow-graph',
+    title: { zh: '展示合規爬蟲流程', en: 'Show crawler governance flow' },
+    body: { zh: '每個節點都有 inputs、outputs、failure modes 與 compliance policy。', en: 'Each node exposes inputs, outputs, failure modes, and compliance policy.' },
+    bullets: { zh: ['Policy Check 不做 bypass', '403/429/CAPTCHA fail closed'], en: ['Policy Check does not bypass', '403/429/CAPTCHA fail closed'] },
+  },
+  {
+    page: 'keywords',
+    target: 'keyword-network',
+    title: { zh: '查看 Keyword Network', en: 'Explore the Keyword Network' },
+    body: { zh: '不同顏色代表不同主題分群，點擊節點可看相關文章與 metadata。', en: 'Colors represent topic groups; click nodes to inspect related posts and metadata.' },
+    bullets: { zh: ['圓形節點大小代表出現次數', '線條代表共同出現'], en: ['Circle size reflects frequency', 'Links show co-occurrence'] },
+  },
+  {
+    page: 'compliance',
+    target: 'compliance-summary',
+    title: { zh: '說明合規與診斷', en: 'Explain compliance diagnostics' },
+    body: { zh: '這頁把 robots、policy blocks、429/403、source health 變成可分析資料。', en: 'This page turns robots, policy blocks, 429/403, and source health into analyzable data.' },
+    bullets: { zh: ['不繞過平台限制', '所有 stop condition 都可追蹤'], en: ['No platform bypass', 'Every stop condition is traceable'] },
+  },
+  {
+    page: 'reports',
+    target: 'report-center',
+    title: { zh: '產生 Excel 報表', en: 'Generate Excel report' },
+    body: { zh: '最後展示資料工程成果可以輸出成可交付的 Excel analytics report。', en: 'Finally show that the pipeline produces a deliverable Excel analytics report.' },
+    bullets: { zh: ['按 Generate Excel Report', '報表會出現在 reports list'], en: ['Click Generate Excel Report', 'The report appears in the reports list'] },
+  },
+];
+
 export function App() {
   const [activePage, setActivePage] = useState<PageKey>('overview');
+  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('twCrawlerLang') as Language) || 'zh');
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [dashboard, setDashboard] = useState<DashboardAnalytics | null>(null);
@@ -152,6 +315,7 @@ export function App() {
   const [crawlFlow, setCrawlFlow] = useState<CrawlFlowAnalytics | null>(null);
   const [dataQualityTable, setDataQualityTable] = useState<DataQualityTableAnalytics | null>(null);
   const [demoStory, setDemoStory] = useState<DemoStoryAnalytics | null>(null);
+  const [complianceSummary, setComplianceSummary] = useState<ComplianceSummary | null>(null);
   const [trends, setTrends] = useState<TrendAnalytics | null>(null);
   const [keywords, setKeywords] = useState<KeywordAnalytics | null>(null);
   const [engagement, setEngagement] = useState<EngagementAnalytics | null>(null);
@@ -170,10 +334,20 @@ export function App() {
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [demoRunning, setDemoRunning] = useState(false);
+  const [reportRunning, setReportRunning] = useState(false);
+  const [lastReportRun, setLastReportRun] = useState<ExcelReportRunResponse | null>(null);
   const [endpointStatus, setEndpointStatus] = useState<Record<string, string>>({});
   const [insight, setInsight] = useState<DrilldownResponse | null>(null);
   const [insightLoading, setInsightLoading] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
   const [status, setStatus] = useState('Connecting to backend...');
+  const t = useCallback((key: string) => messages[language][key] ?? messages.en[key] ?? key, [language]);
+
+  function changeLanguage(next: Language) {
+    setLanguage(next);
+    localStorage.setItem('twCrawlerLang', next);
+  }
 
   const loadCore = useCallback(async () => {
     setCoreLoading(true);
@@ -193,6 +367,7 @@ export function App() {
       ['crawlFlow', api.analytics.crawlFlow()],
       ['dataQualityTable', api.analytics.dataQualityTable()],
       ['demoStory', api.analytics.demoStory()],
+      ['complianceSummary', api.analytics.complianceSummary()],
       ['trends', api.analytics.trends()],
       ['keywords', api.analytics.keywords()],
       ['engagement', api.analytics.engagement()],
@@ -228,12 +403,13 @@ export function App() {
       const nextCrawlFlow = value<CrawlFlowAnalytics>(12);
       const nextDataQualityTable = value<DataQualityTableAnalytics>(13);
       const nextDemoStory = value<DemoStoryAnalytics>(14);
-      const nextTrends = value<TrendAnalytics>(15);
-      const nextKeywords = value<KeywordAnalytics>(16);
-      const nextEngagement = value<EngagementAnalytics>(17);
-      const nextPlatforms = value<PlatformAnalytics>(18);
-      const nextQuality = value<DataQualityAnalytics>(19);
-      const nextWorkflow = value<WorkflowSummary>(20);
+      const nextComplianceSummary = value<ComplianceSummary>(15);
+      const nextTrends = value<TrendAnalytics>(16);
+      const nextKeywords = value<KeywordAnalytics>(17);
+      const nextEngagement = value<EngagementAnalytics>(18);
+      const nextPlatforms = value<PlatformAnalytics>(19);
+      const nextQuality = value<DataQualityAnalytics>(20);
+      const nextWorkflow = value<WorkflowSummary>(21);
       setSummary(nextSummary);
       setSources(nextSources ?? []);
       setSourceCatalog(nextSourceCatalog ?? []);
@@ -249,6 +425,7 @@ export function App() {
       setCrawlFlow(nextCrawlFlow);
       setDataQualityTable(nextDataQualityTable);
       setDemoStory(nextDemoStory);
+      setComplianceSummary(nextComplianceSummary);
       setTrends(nextTrends);
       setKeywords(nextKeywords);
       setEngagement(nextEngagement);
@@ -309,6 +486,17 @@ export function App() {
     void loadPosts(filters);
   }, [filters, loadPosts]);
 
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setInsight(null);
+        setAssistantOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   async function refreshAfterRun<T>(operation: Promise<T>): Promise<T> {
     const result = await operation;
     await loadCore();
@@ -331,6 +519,22 @@ export function App() {
     }
   }
 
+  async function generateExcelReport() {
+    setInsight(null);
+    setReportRunning(true);
+    setStatus('Generating Excel report...');
+    try {
+      const result = await api.reportsApi.generateExcel();
+      setLastReportRun(result);
+      await loadCore();
+      setStatus(`Excel report ready: ${result.output_path}`);
+    } catch (error) {
+      setStatus((error as Error).message);
+    } finally {
+      setReportRunning(false);
+    }
+  }
+
   return (
     <main className="workbench-shell">
       <aside className="sidebar">
@@ -349,10 +553,13 @@ export function App() {
                 key={page.key}
                 className={activePage === page.key ? 'active' : ''}
                 type="button"
-                onClick={() => setActivePage(page.key)}
+                onClick={() => {
+                  setInsight(null);
+                  setActivePage(page.key);
+                }}
               >
                 <Icon size={17} />
-                <span>{page.label}</span>
+                <span>{t(page.labelKey)}</span>
               </button>
             );
           })}
@@ -362,17 +569,25 @@ export function App() {
       <section className="content-shell">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Public data pipeline portfolio</p>
-            <h1>{pages.find((page) => page.key === activePage)?.label}</h1>
+            <p className="eyebrow">{t('top.eyebrow')}</p>
+            <h1>{t(pages.find((page) => page.key === activePage)?.labelKey ?? '')}</h1>
           </div>
           <div className="topbar-actions">
+            <div className="language-toggle" aria-label="Language switcher">
+              <button className={language === 'zh' ? 'active' : ''} type="button" onClick={() => changeLanguage('zh')}>中文</button>
+              <button className={language === 'en' ? 'active' : ''} type="button" onClick={() => changeLanguage('en')}>English</button>
+            </div>
+            <button className="demo-toggle" type="button" onClick={() => setAssistantOpen(true)}>
+              <Sparkles size={16} />
+              {t('button.assistant')}
+            </button>
             <button
               className={demoMode ? 'demo-toggle active' : 'demo-toggle'}
               type="button"
               onClick={() => setDemoMode((enabled) => !enabled)}
             >
               <Sparkles size={16} />
-              Demo Mode
+              {t('button.demoMode')}
             </button>
             <button
               className="primary-action"
@@ -381,7 +596,7 @@ export function App() {
               disabled={demoRunning}
             >
               <PlayCircle size={16} />
-              {demoRunning ? 'Running...' : 'Run demo workflow'}
+              {demoRunning ? t('button.running') : t('button.runDemo')}
             </button>
             <span className="api-status">{status}</span>
             <button className="icon-button" onClick={() => void loadCore()} aria-label="Refresh dashboard">
@@ -397,6 +612,30 @@ export function App() {
         )}
 
         {demoMode && <InterviewDemoGuide activePage={activePage} story={demoStory} />}
+        <DemoAssistant
+          open={assistantOpen}
+          step={tourStep}
+          language={language}
+          onClose={() => setAssistantOpen(false)}
+          onStepChange={(nextStep, page) => {
+            setInsight(null);
+            setTourStep(nextStep);
+            setActivePage(page);
+            window.setTimeout(() => {
+              document.querySelector(`[data-tour="${tourSteps[nextStep].target}"]`)?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+              });
+            }, 120);
+          }}
+          onOpen={() => {
+            setInsight(null);
+            setAssistantOpen(true);
+            setTourStep(0);
+            setActivePage(tourSteps[0].page);
+          }}
+          t={t}
+        />
         {coreLoading && <div className="loading-strip">Loading analytics endpoints...</div>}
         <EndpointStatusMatrix statuses={endpointStatus} />
 
@@ -409,6 +648,7 @@ export function App() {
           loading={insightLoading}
           onClose={() => setInsight(null)}
           onDrilldown={(kind, id) => void openDrilldown(kind, id)}
+          t={t}
         />
       )}
     </main>
@@ -419,6 +659,7 @@ export function App() {
       case 'overview':
         return (
           <>
+            <div data-tour="overview-kpis">
             <SummaryCards
               summary={summary}
               onSelectMetric={(key, label, value) => void openDrilldown('kpi', key, {
@@ -426,6 +667,7 @@ export function App() {
                 summary: { value },
               })}
             />
+            </div>
             <OverviewDashboard
               dashboard={dashboard}
               jobs={jobs}
@@ -496,6 +738,7 @@ export function App() {
             network={keywordNetwork}
             heatmap={keywordHeatmap}
             onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+            t={t}
           />
         );
       case 'engagement':
@@ -518,16 +761,28 @@ export function App() {
           />
         );
       case 'reports':
-        return <ReportsCenter reports={reports} />;
+        return (
+          <ReportsCenter
+            reports={reports}
+            running={reportRunning}
+            lastRun={lastReportRun}
+            onGenerate={() => void generateExcelReport()}
+            onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+            t={t}
+          />
+        );
       case 'compliance':
         return (
           <CompliancePage
             jobs={jobs}
             quality={quality}
+            complianceSummary={complianceSummary}
             onVerifyDcard={(payload) => refreshAfterRun(api.verifyDcard(payload))}
             onVerifyPtt={(payload) => refreshAfterRun(api.verifyPtt(payload))}
             onVerifyNews={(payload) => refreshAfterRun(api.verifyNewsRss(payload))}
             onDiagnoseDcard={(payload) => refreshAfterRun(api.diagnoseDcard(payload))}
+            onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+            t={t}
           />
         );
       case 'settings':
@@ -556,6 +811,83 @@ function EndpointStatusMatrix({ statuses }: { statuses: Record<string, string> }
   );
 }
 
+function DemoAssistant({
+  open,
+  step,
+  language,
+  onClose,
+  onStepChange,
+  onOpen,
+  t,
+}: {
+  open: boolean;
+  step: number;
+  language: Language;
+  onClose: () => void;
+  onStepChange: (step: number, page: PageKey) => void;
+  onOpen: () => void;
+  t: (key: string) => string;
+}) {
+  useEffect(() => {
+    document.querySelectorAll('.tour-target-active').forEach((item) => item.classList.remove('tour-target-active'));
+    if (open) {
+      document.querySelector(`[data-tour="${tourSteps[step].target}"]`)?.classList.add('tour-target-active');
+    }
+    return () => {
+      document.querySelectorAll('.tour-target-active').forEach((item) => item.classList.remove('tour-target-active'));
+    };
+  }, [open, step]);
+
+  if (!open) {
+    return (
+      <button className="assistant-bubble" type="button" onClick={onOpen} aria-label={t('button.assistant')}>
+        <Sparkles size={20} />
+        <span>{t('button.assistant')}</span>
+      </button>
+    );
+  }
+  const current = tourSteps[step];
+  const isLast = step === tourSteps.length - 1;
+  return (
+    <>
+      <div className="tour-highlight" data-active-target={current.target} />
+      <aside className="assistant-card">
+        <div className="assistant-header">
+          <div>
+            <p className="eyebrow">{t('assistant.title')}</p>
+            <h2>{current.title[language]}</h2>
+          </div>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="Close assistant">
+            <X size={16} />
+          </button>
+        </div>
+        <p>{current.body[language]}</p>
+        <ul>
+          {current.bullets[language].map((item) => <li key={item}>{item}</li>)}
+        </ul>
+        <div className="assistant-target">Target: {current.target}</div>
+        <div className="assistant-actions">
+          <button type="button" onClick={() => onStepChange(Math.max(step - 1, 0), tourSteps[Math.max(step - 1, 0)].page)} disabled={step === 0}>{t('assistant.prev')}</button>
+          <button type="button" onClick={onClose}>{t('assistant.skip')}</button>
+          <button
+            className="primary-action"
+            type="button"
+            onClick={() => {
+              if (isLast) {
+                onClose();
+              } else {
+                onStepChange(step + 1, tourSteps[step + 1].page);
+              }
+            }}
+          >
+            {isLast ? t('assistant.done') : t('assistant.next')}
+          </button>
+        </div>
+      </aside>
+    </>
+  );
+}
+
 function EnhancedFlowNode({ data, selected }: NodeProps) {
   const payload = data as Record<string, unknown>;
   const status = String(payload.status ?? payload.type ?? 'ready');
@@ -578,11 +910,13 @@ function InsightDrawer({
   loading,
   onClose,
   onDrilldown,
+  t,
 }: {
   insight: DrilldownResponse;
   loading: boolean;
   onClose: () => void;
   onDrilldown: (kind: string, id: string | number) => void;
+  t: (key: string) => string;
 }) {
   const relatedPostColumns = columnsForRows(insight.related_posts);
   const relatedJobColumns = columnsForRows(insight.related_jobs);
@@ -600,6 +934,11 @@ function InsightDrawer({
       </div>
       {loading && <div className="loading-strip">Loading drilldown...</div>}
       <div className="drawer-body">
+        <div className="metadata-status">
+          <strong>{t('metadata.status')} / Metadata</strong>
+          <span>{insight.metadata_status ?? 'available'}</span>
+          <small>Fields: {(insight.available_fields ?? []).join(', ') || '-'}</small>
+        </div>
         <InsightSection title="Summary" payload={insight.summary} />
         <InsightSection title="Metadata" payload={insight.metadata} />
         {insight.quality_flags.length > 0 && (
@@ -692,7 +1031,7 @@ function DemoWalkthroughPage({
   const [selectedStep, setSelectedStep] = useState<DemoStoryStep | null>(null);
   const activeStep = selectedStep ?? story?.walkthrough_steps[0] ?? null;
   return (
-    <section className="story-layout">
+    <section className="story-layout" data-tour="demo-workflow">
       <div className="panel wide-panel story-hero">
         <div>
           <p className="eyebrow">guided portfolio demo</p>
@@ -788,7 +1127,7 @@ function ArchitectureMapPage({
 }) {
   return (
     <section className="page-grid analytics-grid">
-      <div className="wide-panel">
+      <div className="wide-panel" data-tour="architecture-map">
         <StoryGraphPanel graph={graph} title="System Architecture Map" onDrilldown={onDrilldown} />
       </div>
       <aside className="panel wide-panel">
@@ -1136,7 +1475,7 @@ function WorkflowPage({
 
   return (
     <section className="flow-layout">
-      <div className="panel flow-panel">
+      <div className="panel flow-panel" data-tour="workflow-graph">
         <div className="panel-header">
           <h2>Crawler Pipeline Graph</h2>
           {workflow?.latest_error && <span className="pill">latest stop condition captured</span>}
@@ -1214,11 +1553,13 @@ function KeywordPage({
   network,
   heatmap,
   onDrilldown,
+  t,
 }: {
   keywords: KeywordAnalytics | null;
   network: KeywordNetworkAnalytics | null;
   heatmap: KeywordHeatmapAnalytics | null;
   onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
+  t: (key: string) => string;
 }) {
   const [selectedNode, setSelectedNode] = useState<Record<string, unknown> | null>(null);
   const heatmapMax = Math.max(...(heatmap?.cells ?? []).map((cell) => cell.count), 1);
@@ -1226,11 +1567,14 @@ function KeywordPage({
     { accessorKey: 'keyword', header: 'Keyword' },
     { accessorKey: 'count', header: 'Count' },
   ];
+  const legend = Array.from(
+    new Map((network?.nodes ?? []).map((node) => [node.group ?? 'Topic', node.color ?? '#64748b'])),
+  );
 
   return (
     <section className="page-grid analytics-grid">
       <div className="panel">
-        <div className="panel-header"><h2>Keyword Frequency</h2></div>
+        <div className="panel-header"><h2>{t('keyword.frequency')}</h2></div>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={keywords?.keywords ?? []} layout="vertical">
             <XAxis type="number" allowDecimals={false} />
@@ -1240,14 +1584,50 @@ function KeywordPage({
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="panel network-panel">
-        <div className="panel-header"><h2>Keyword Co-occurrence Network</h2></div>
+      <div className="panel network-panel" data-tour="keyword-network">
+        <div className="panel-header"><h2>{t('keyword.network')}</h2><span className="pill">colored topic groups</span></div>
+        <div className="network-legend" aria-label={t('network.legend')}>
+          {legend.map(([group, color]) => (
+            <span key={group}><i style={{ background: color }} />{group}</span>
+          ))}
+        </div>
         <ForceGraph2D
           graphData={{ nodes: network?.nodes ?? [], links: network?.links ?? [] }}
           nodeLabel="label"
           nodeVal="value"
           linkWidth={(link) => Math.max(1, Number(link.value ?? 1) / 6)}
-          nodeColor={() => 'var(--color-primary)'}
+          nodeColor={(node) => String((node as { color?: string }).color ?? '#2563eb')}
+          nodeCanvasObject={(node, ctx, globalScale) => {
+            const payload = node as { x?: number; y?: number; label?: string; value?: number; color?: string };
+            const x = payload.x ?? 0;
+            const y = payload.y ?? 0;
+            const radius = Math.max(7, Math.sqrt(Number(payload.value ?? 1)) * 2.4);
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
+            ctx.fillStyle = payload.color ?? '#2563eb';
+            ctx.shadowColor = payload.color ?? '#2563eb';
+            ctx.shadowBlur = 10;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+            const label = payload.label ?? '';
+            const fontSize = Math.max(10, 13 / globalScale);
+            ctx.font = `700 ${fontSize}px Inter, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = '#0f172a';
+            ctx.fillText(label, x, y + radius + 3);
+          }}
+          nodePointerAreaPaint={(node, color, ctx) => {
+            const payload = node as { x?: number; y?: number; value?: number };
+            const radius = Math.max(10, Math.sqrt(Number(payload.value ?? 1)) * 2.8);
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(payload.x ?? 0, payload.y ?? 0, radius, 0, 2 * Math.PI, false);
+            ctx.fill();
+          }}
           onNodeClick={(node) => {
             const payload = node as Record<string, unknown>;
             setSelectedNode(payload);
@@ -1261,7 +1641,7 @@ function KeywordPage({
         />
       </div>
       <div className="panel wide-panel">
-        <div className="panel-header"><h2>Platform x Keyword Heatmap</h2></div>
+        <div className="panel-header"><h2>{t('keyword.heatmap')}</h2></div>
         <div className="heatmap-grid" style={{ gridTemplateColumns: `140px repeat(${heatmap?.keywords.length ?? 1}, minmax(70px, 1fr))` }}>
           <span />
           {(heatmap?.keywords ?? []).map((keyword) => <strong key={keyword}>{keyword}</strong>)}
@@ -1486,13 +1866,48 @@ function QualityPage({
   );
 }
 
-function ReportsCenter({ reports }: { reports: ReportSummary[] }) {
+function ReportsCenter({
+  reports,
+  running,
+  lastRun,
+  onGenerate,
+  onDrilldown,
+  t,
+}: {
+  reports: ReportSummary[];
+  running: boolean;
+  lastRun: ExcelReportRunResponse | null;
+  onGenerate: () => void;
+  onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
+  t: (key: string) => string;
+}) {
   return (
-    <section className="dashboard-grid">
-      <ReportsPanel reports={reports} />
+    <section className="dashboard-grid" data-tour="report-center">
       <div className="panel">
         <div className="panel-header">
-          <h2>Excel Report Sheets</h2>
+          <h2>{t('reports.generator')}</h2>
+          <button className="primary-action" type="button" onClick={onGenerate} disabled={running}>
+            <FileSpreadsheet size={16} />
+            {running ? t('reports.generating') : t('reports.generate')}
+          </button>
+        </div>
+        <div className="metadata-list">
+          <div className="metadata-row"><strong>{t('reports.output')}</strong><span>{lastRun?.output_path ?? 'data/exports/analysis_report.xlsx'}</span></div>
+          <div className="metadata-row"><strong>{t('reports.rows')}</strong><span>{lastRun?.row_count ?? '-'}</span></div>
+          <div className="metadata-row"><strong>{t('reports.matches')}</strong><span>{lastRun?.keyword_match_count ?? '-'}</span></div>
+        </div>
+      </div>
+      <ReportsPanel
+        reports={reports}
+        onSelectReport={(report) => onDrilldown('report', report.path, {
+          title: report.path,
+          subtitle: report.report_type,
+          metadata: report as unknown as Record<string, unknown>,
+        })}
+      />
+      <div className="panel">
+        <div className="panel-header">
+          <h2>{t('reports.sheets')}</h2>
         </div>
         <div className="metadata-list">
           {['Summary', 'Raw Data', 'Daily Trend', 'Keyword Matches', 'Top Posts', 'Platform Comparison', 'Data Quality', 'Crawl Runs'].map((sheet) => (
@@ -1510,13 +1925,17 @@ function ReportsCenter({ reports }: { reports: ReportSummary[] }) {
 function CompliancePage({
   jobs,
   quality,
+  complianceSummary,
   onVerifyDcard,
   onVerifyPtt,
   onVerifyNews,
   onDiagnoseDcard,
+  onDrilldown,
+  t,
 }: {
   jobs: CrawlJobResponse[];
   quality: DataQualityAnalytics | null;
+  complianceSummary: ComplianceSummary | null;
   onVerifyDcard: (payload: { forum: string; mode: string; max_posts: number }) => Promise<VerifyResponse>;
   onVerifyPtt: (payload: {
     board: string;
@@ -1527,29 +1946,49 @@ function CompliancePage({
   }) => Promise<VerifyResponse>;
   onVerifyNews: (payload: { source_name: string; feed_url: string; max_articles: number }) => Promise<VerifyResponse>;
   onDiagnoseDcard: (payload: { forum: string }) => Promise<DiagnosticsResponse>;
+  onDrilldown: (kind: string, id: string | number, fallback?: Partial<DrilldownResponse>) => void;
+  t: (key: string) => string;
 }) {
   return (
-    <section className="dashboard-grid">
+    <section className="page-grid analytics-grid" data-tour="compliance-summary">
       <ControlPanel
         onVerifyDcard={onVerifyDcard}
         onVerifyPtt={onVerifyPtt}
         onVerifyNews={onVerifyNews}
         onDiagnoseDcard={onDiagnoseDcard}
       />
+      <div className="panel">
+        <div className="panel-header"><h2>{t('compliance.summary')}</h2></div>
+        <div className="metadata-list">
+          {Object.entries(complianceSummary?.summary ?? {}).map(([key, value]) => (
+            <button className="metadata-row interactive-row" type="button" key={key} onClick={() => onDrilldown('quality', key, { title: key, summary: { value } })}>
+              <strong>{key}</strong><span>{value}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       <SimpleList title="Stop Conditions" rows={(quality?.policy_events ?? []).map((item) => [item.category, item.count])} />
       <div className="panel wide-panel">
         <div className="panel-header">
-          <h2>Recent Compliance Outcomes</h2>
+          <h2>{t('compliance.outcomes')}</h2>
         </div>
         <div className="job-list">
           {jobs.map((job) => (
-            <div className="job-row" key={job.id}>
+            <button className="job-row interactive-row" type="button" key={job.id} onClick={() => onDrilldown('job', job.id, { title: `${job.source} / ${job.job_type}`, metadata: job as unknown as Record<string, unknown> })}>
               <div>
                 <div className="job-title">{job.source} / {job.job_type}</div>
                 <div className="job-meta">{job.error_category ?? 'no policy event'} / {job.error_reason ?? 'ok'}</div>
               </div>
               <StatusBadge value={job.error_category ?? job.status} />
-            </div>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="panel wide-panel">
+        <div className="panel-header"><h2>{t('compliance.rules')}</h2></div>
+        <div className="highlight-grid">
+          {(complianceSummary?.governance_rules ?? []).map((rule) => (
+            <div className="highlight-card" key={rule}><ShieldCheck size={17} /><span>{rule}</span></div>
           ))}
         </div>
       </div>

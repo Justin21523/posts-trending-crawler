@@ -574,12 +574,68 @@ class APIQueryService:
                 link_counts[(left, right)] += 1
         return {
             "nodes": [
-                {"id": keyword, "label": keyword, "value": count, "samples": samples[keyword]}
+                {
+                    "id": keyword,
+                    "label": keyword,
+                    "value": count,
+                    "samples": samples[keyword],
+                    **self._keyword_category(keyword),
+                    "metadata": {
+                        "keyword": keyword,
+                        "match_count": count,
+                        "sample_count": len(samples[keyword]),
+                    },
+                }
                 for keyword, count in keyword_counts.most_common(30)
             ],
             "links": [
                 {"source": left, "target": right, "value": count}
                 for (left, right), count in link_counts.most_common(60)
+            ],
+        }
+
+    def analytics_compliance_summary(self) -> dict[str, Any]:
+        """Return compliance and crawler governance dashboard data."""
+        quality = self.analytics_data_quality()
+        source_health = self.analytics_source_health()
+        with get_session() as session:
+            recent = session.execute(
+                select(CrawlJob, Source.name)
+                .join(Source)
+                .order_by(desc(CrawlJob.started_at))
+                .limit(20)
+            ).all()
+            status_rows = session.execute(
+                select(CrawlJob.status, func.count(CrawlJob.id)).group_by(CrawlJob.status)
+            ).all()
+        policy_events = quality["policy_events"]
+        return {
+            "summary": {
+                "policy_event_count": sum(item["count"] for item in policy_events),
+                "blocked_count": sum(
+                    item["count"]
+                    for item in policy_events
+                    if "403" in item["category"] or "blocked" in item["category"]
+                ),
+                "rate_limited_count": sum(
+                    item["count"] for item in policy_events if "429" in item["category"]
+                ),
+                "source_count": len(source_health["rows"]),
+            },
+            "policy_events": policy_events,
+            "status_counts": [
+                {"status": status, "count": int(count)} for status, count in status_rows
+            ],
+            "source_health": source_health["rows"],
+            "latest_diagnostics": [
+                self._job_dict(job, source_name) for job, source_name in recent
+            ],
+            "governance_rules": [
+                "Public data only",
+                "robots.txt checked before fetch",
+                "403/429/CAPTCHA/login wall fail closed",
+                "Request budget and per-domain cooldown",
+                "No CAPTCHA bypass, login bypass, or stealth evasion",
             ],
         }
 
@@ -799,6 +855,45 @@ class APIQueryService:
 
     def analytics_drilldown(self, *, kind: str, item_id: str) -> dict[str, Any]:
         """Return a unified drawer payload for UI drilldown."""
+        if kind == "report":
+            reports = self.list_reports()
+            report = next((item for item in reports if item["path"] == item_id), None)
+            if not report:
+                return self._empty_drilldown(kind, item_id)
+            return {
+                "kind": kind,
+                "id": item_id,
+                "title": Path(item_id).name,
+                "subtitle": report.get("report_type") or "report",
+                "summary": {
+                    "status": report.get("status"),
+                    "platform": report.get("platform"),
+                    "generated_at": report.get("generated_at"),
+                },
+                "metadata": report,
+                "related_posts": self.search_posts(limit=8)["rows"],
+                "related_jobs": self.analytics_overview()["latest_jobs"],
+                "quality_flags": [],
+                "raw_payload": report,
+            }
+        if kind == "quality":
+            quality = self.analytics_data_quality()
+            return {
+                "kind": kind,
+                "id": item_id,
+                "title": item_id.replace("_", " ").title(),
+                "subtitle": "Data quality drilldown",
+                "summary": quality,
+                "metadata": {
+                    "quality_key": item_id,
+                    "checks": quality["checks"],
+                    "policy_events": quality["policy_events"],
+                },
+                "related_posts": self.search_posts(limit=8)["rows"],
+                "related_jobs": self.analytics_overview()["latest_jobs"],
+                "quality_flags": [item_id],
+                "raw_payload": quality,
+            }
         with get_session() as session:
             if kind == "post":
                 post = session.get(Post, int(item_id))
@@ -936,6 +1031,26 @@ class APIQueryService:
                 "raw_payload": overview,
             }
         return self._empty_drilldown(kind, item_id)
+
+    def finalize_drilldown(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Ensure drilldown payloads always expose metadata diagnostics."""
+        metadata = payload.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {"value": metadata}
+        available = sorted(str(key) for key, value in metadata.items() if value not in (None, ""))
+        missing = sorted(str(key) for key, value in metadata.items() if value in (None, ""))
+        if not available:
+            metadata = {
+                "kind": payload.get("kind"),
+                "id": payload.get("id"),
+                "metadata_note": "No source-specific metadata was available.",
+            }
+            available = sorted(metadata)
+        payload["metadata"] = metadata
+        payload["metadata_status"] = "available" if available else "missing"
+        payload["available_fields"] = available
+        payload["missing_fields"] = missing
+        return payload
 
     def workflow_summary(self) -> dict[str, Any]:
         """Return a visual crawl workflow summary for the portfolio UI."""
@@ -1338,6 +1453,7 @@ class APIQueryService:
 
     def _keyword_drilldown(self, keyword: str) -> dict[str, Any]:
         rows = self.search_posts(keyword=keyword, limit=12)["rows"]
+        category = self._keyword_category(keyword)
         return {
             "kind": "keyword",
             "id": keyword,
@@ -1346,6 +1462,7 @@ class APIQueryService:
             "summary": {"related_posts": len(rows)},
             "metadata": {
                 "keyword": keyword,
+                **category,
                 "heatmap_cells": [
                     cell
                     for cell in self.analytics_keyword_heatmap()["cells"]
@@ -1401,6 +1518,25 @@ class APIQueryService:
             "quality_flags": ["not_found"],
             "raw_payload": {},
         }
+
+    @staticmethod
+    def _keyword_category(keyword: str) -> dict[str, str]:
+        tech = {"AI", "生成式AI", "Python", "半導體"}
+        finance = {"台積電"}
+        career = {"工作", "面試", "薪資"}
+        analysis = {"資料分析"}
+        work_style = {"遠端工作"}
+        if keyword in tech:
+            return {"category": "tech-ai", "group": "AI / Tech", "color": "#2563eb"}
+        if keyword in finance:
+            return {"category": "finance", "group": "Finance", "color": "#0f766e"}
+        if keyword in career:
+            return {"category": "career", "group": "Career", "color": "#f59e0b"}
+        if keyword in analysis:
+            return {"category": "data-analysis", "group": "Data Analysis", "color": "#7c3aed"}
+        if keyword in work_style:
+            return {"category": "work-style", "group": "Work Style", "color": "#0891b2"}
+        return {"category": "topic", "group": "Topic", "color": "#64748b"}
 
     @staticmethod
     def _quality_post_row(post: Post, source_name: str) -> dict[str, Any]:
@@ -1595,3 +1731,21 @@ class APIControlService:
         from dcard_crawler.services.demo_seed import DemoSeedService
 
         return DemoSeedService().seed(rows=rows, reset_demo=reset_demo)
+
+    def generate_excel_report(
+        self,
+        *,
+        output_path: str = "data/exports/analysis_report.xlsx",
+    ) -> dict[str, Any]:
+        """Generate the portfolio Excel report through the analysis pipeline."""
+        from dcard_crawler.analysis.excel_report import export_analysis_report
+
+        tables = export_analysis_report(None, output_path, "configs/keywords.txt", None)
+        path = Path(output_path)
+        return {
+            "status": "completed",
+            "output_path": str(path),
+            "row_count": int(len(tables.get("Raw Data", []))),
+            "keyword_match_count": int(len(tables.get("Keyword Matches", []))),
+            "sheets": list(tables),
+        }

@@ -4,9 +4,10 @@ import { StatusBadge } from './StatusBadge';
 
 type ReportsPanelProps = {
   reports: ReportSummary[];
+  onSelectReport?: (report: ReportSummary) => void;
 };
 
-export function ReportsPanel({ reports }: ReportsPanelProps) {
+export function ReportsPanel({ reports, onSelectReport }: ReportsPanelProps) {
   return (
     <section className="panel">
       <div className="panel-header">
@@ -17,14 +18,14 @@ export function ReportsPanel({ reports }: ReportsPanelProps) {
           <div className="empty-state">No reports yet.</div>
         ) : (
           reports.map((report) => (
-            <div className="report-row" key={report.path}>
+            <button className="report-row interactive-row" type="button" key={report.path} onClick={() => onSelectReport?.(report)}>
               <FileJson size={17} />
               <div className="report-main">
                 <strong>{report.report_type}</strong>
                 <span>{report.path}</span>
               </div>
               <StatusBadge value={report.status ?? report.platform} />
-            </div>
+            </button>
           ))
         )}
       </div>

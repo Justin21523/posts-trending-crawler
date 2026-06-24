@@ -218,7 +218,16 @@ export type TimeSeriesAnalytics = {
 };
 
 export type KeywordNetworkAnalytics = {
-  nodes: Array<{ id: string; label: string; value: number; samples?: Array<Record<string, unknown>> }>;
+  nodes: Array<{
+    id: string;
+    label: string;
+    value: number;
+    category?: string;
+    group?: string;
+    color?: string;
+    metadata?: Record<string, unknown>;
+    samples?: Array<Record<string, unknown>>;
+  }>;
   links: Array<{ source: string; target: string; value: number }>;
 };
 
@@ -328,4 +337,24 @@ export type DrilldownResponse = {
   related_jobs: Array<Record<string, unknown>>;
   quality_flags: string[];
   raw_payload: Record<string, unknown>;
+  metadata_status?: string;
+  available_fields?: string[];
+  missing_fields?: string[];
+};
+
+export type ComplianceSummary = {
+  summary: Record<string, number>;
+  policy_events: Array<{ category: string; count: number }>;
+  status_counts: Array<{ status: string; count: number }>;
+  source_health: Array<Record<string, unknown>>;
+  latest_diagnostics: Array<Record<string, unknown>>;
+  governance_rules: string[];
+};
+
+export type ExcelReportRunResponse = {
+  status: string;
+  output_path: string;
+  row_count: number;
+  keyword_match_count: number;
+  sheets: string[];
 };
