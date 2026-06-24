@@ -24,7 +24,10 @@ import {
   FileText,
   GitBranch,
   Layers,
+  Network,
+  PlayCircle,
   RefreshCw,
+  Route,
   Search,
   Settings,
   ShieldCheck,
@@ -62,6 +65,8 @@ import type {
   DataQualityTableAnalytics,
   DashboardAnalytics,
   DashboardSummary,
+  DemoStoryAnalytics,
+  DemoStoryStep,
   DiagnosticsResponse,
   EngagementAnalytics,
   GraphNode,
@@ -75,6 +80,7 @@ import type {
   SourceCatalogEntryStatus,
   SourceHealthAnalytics,
   SourceResponse,
+  StoryGraph,
   TimeSeriesAnalytics,
   TrendAnalytics,
   VerifyResponse,
@@ -90,8 +96,11 @@ import { SummaryCards } from './components/SummaryCards';
 
 type PageKey =
   | 'overview'
+  | 'demo'
+  | 'architecture'
   | 'sources'
   | 'workflow'
+  | 'lifecycle'
   | 'runs'
   | 'explorer'
   | 'trends'
@@ -105,8 +114,11 @@ type PageKey =
 
 const pages: Array<{ key: PageKey; label: string; icon: typeof Activity }> = [
   { key: 'overview', label: 'Overview Dashboard', icon: BarChart3 },
+  { key: 'demo', label: 'Demo Walkthrough', icon: PlayCircle },
+  { key: 'architecture', label: 'Architecture Map', icon: Network },
   { key: 'sources', label: 'Source Registry', icon: Database },
   { key: 'workflow', label: 'Crawler Workflow', icon: GitBranch },
+  { key: 'lifecycle', label: 'Data Lifecycle Story', icon: Route },
   { key: 'runs', label: 'Crawl Runs', icon: Activity },
   { key: 'explorer', label: 'Data Explorer', icon: Search },
   { key: 'trends', label: 'Trend Analytics', icon: TrendingUp },
@@ -133,6 +145,7 @@ export function App() {
   const [lineage, setLineage] = useState<LineageAnalytics | null>(null);
   const [crawlFlow, setCrawlFlow] = useState<CrawlFlowAnalytics | null>(null);
   const [dataQualityTable, setDataQualityTable] = useState<DataQualityTableAnalytics | null>(null);
+  const [demoStory, setDemoStory] = useState<DemoStoryAnalytics | null>(null);
   const [trends, setTrends] = useState<TrendAnalytics | null>(null);
   const [keywords, setKeywords] = useState<KeywordAnalytics | null>(null);
   const [engagement, setEngagement] = useState<EngagementAnalytics | null>(null);
@@ -147,6 +160,8 @@ export function App() {
   const [selectedPost, setSelectedPost] = useState<PostResponse | null>(null);
   const [filters, setFilters] = useState<PostFilters>({ limit: 50 });
   const [loadingPosts, setLoadingPosts] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+  const [demoRunning, setDemoRunning] = useState(false);
   const [status, setStatus] = useState('Connecting to backend...');
 
   const loadCore = useCallback(async () => {
@@ -166,6 +181,7 @@ export function App() {
         nextLineage,
         nextCrawlFlow,
         nextDataQualityTable,
+        nextDemoStory,
         nextTrends,
         nextKeywords,
         nextEngagement,
@@ -187,6 +203,7 @@ export function App() {
         api.analytics.lineage(),
         api.analytics.crawlFlow(),
         api.analytics.dataQualityTable(),
+        api.analytics.demoStory(),
         api.analytics.trends(),
         api.analytics.keywords(),
         api.analytics.engagement(),
@@ -208,6 +225,7 @@ export function App() {
       setLineage(nextLineage);
       setCrawlFlow(nextCrawlFlow);
       setDataQualityTable(nextDataQualityTable);
+      setDemoStory(nextDemoStory);
       setTrends(nextTrends);
       setKeywords(nextKeywords);
       setEngagement(nextEngagement);
@@ -246,6 +264,21 @@ export function App() {
     return result;
   }
 
+  async function runDemoWorkflow() {
+    setDemoRunning(true);
+    setStatus('Generating demo workflow dataset...');
+    try {
+      await refreshAfterRun(api.demo.runWorkflow({ rows: 2000, reset_demo: true }));
+      setStatus('Demo workflow ready');
+      setDemoMode(true);
+      setActivePage('demo');
+    } catch (error) {
+      setStatus((error as Error).message);
+    } finally {
+      setDemoRunning(false);
+    }
+  }
+
   return (
     <main className="workbench-shell">
       <aside className="sidebar">
@@ -281,6 +314,23 @@ export function App() {
             <h1>{pages.find((page) => page.key === activePage)?.label}</h1>
           </div>
           <div className="topbar-actions">
+            <button
+              className={demoMode ? 'demo-toggle active' : 'demo-toggle'}
+              type="button"
+              onClick={() => setDemoMode((enabled) => !enabled)}
+            >
+              <Sparkles size={16} />
+              Demo Mode
+            </button>
+            <button
+              className="primary-action"
+              type="button"
+              onClick={() => void runDemoWorkflow()}
+              disabled={demoRunning}
+            >
+              <PlayCircle size={16} />
+              {demoRunning ? 'Running...' : 'Run demo workflow'}
+            </button>
             <span className="api-status">{status}</span>
             <button className="icon-button" onClick={() => void loadCore()} aria-label="Refresh dashboard">
               <RefreshCw size={17} />
@@ -293,6 +343,8 @@ export function App() {
             Demo dataset generated for portfolio preview. Records are labeled with crawl_source=demo.
           </div>
         )}
+
+        {demoMode && <InterviewDemoGuide activePage={activePage} story={demoStory} />}
 
         {renderPage(activePage)}
       </section>
@@ -310,10 +362,16 @@ export function App() {
             <OverviewDashboard dashboard={dashboard} jobs={jobs} />
           </>
         );
+      case 'demo':
+        return <DemoWalkthroughPage story={demoStory} onRunDemo={() => void runDemoWorkflow()} running={demoRunning} />;
+      case 'architecture':
+        return <ArchitectureMapPage graph={demoStory?.architecture ?? null} story={demoStory} />;
       case 'sources':
         return <SourceRegistry sources={sources} catalog={sourceCatalog} summary={summary} />;
       case 'workflow':
         return <WorkflowPage workflow={workflow} crawlFlow={crawlFlow} />;
+      case 'lifecycle':
+        return <LifecycleStoryPage graph={demoStory?.lifecycle ?? null} story={demoStory} />;
       case 'runs':
         return <JobsTimeline jobs={jobs} />;
       case 'explorer':
@@ -361,6 +419,224 @@ export function App() {
         return null;
     }
   }
+}
+
+function InterviewDemoGuide({
+  activePage,
+  story,
+}: {
+  activePage: PageKey;
+  story: DemoStoryAnalytics | null;
+}) {
+  const pageMessage: Partial<Record<PageKey, string>> = {
+    overview: 'Start here: KPI cards prove the crawler stores enough normalized data to analyze trends.',
+    demo: 'Walk an interviewer through the full public-data workflow from source selection to Excel export.',
+    architecture: 'Use this map to explain how connectors, crawler core, SQLite, API, UI, and Excel reports fit together.',
+    workflow: 'Click each pipeline node to show governance, inputs, outputs, failure modes, and compliance strategy.',
+    lifecycle: 'Use this lineage story to trace one article from raw response to analytics and Excel output.',
+    quality: 'Show that blocked requests and data quality problems are treated as measurable pipeline facts.',
+    reports: 'Close the demo by showing how analytics become reproducible Excel deliverables.',
+  };
+  return (
+    <div className="demo-guide">
+      <div>
+        <p className="eyebrow">Interview demo mode</p>
+        <strong>{pageMessage[activePage] ?? 'Use this page to discuss the data engineering capability behind the UI.'}</strong>
+      </div>
+      <div className="demo-guide-metrics">
+        <span>{story?.kpis.total_posts ?? 0} posts</span>
+        <span>{story?.kpis.total_crawl_runs ?? 0} crawl runs</span>
+        <span>{story?.demo_live_ratio.demo ?? 0} demo rows</span>
+      </div>
+    </div>
+  );
+}
+
+function DemoWalkthroughPage({
+  story,
+  onRunDemo,
+  running,
+}: {
+  story: DemoStoryAnalytics | null;
+  onRunDemo: () => void;
+  running: boolean;
+}) {
+  const [selectedStep, setSelectedStep] = useState<DemoStoryStep | null>(null);
+  const activeStep = selectedStep ?? story?.walkthrough_steps[0] ?? null;
+  return (
+    <section className="story-layout">
+      <div className="panel wide-panel story-hero">
+        <div>
+          <p className="eyebrow">guided portfolio demo</p>
+          <h2>{story?.title ?? 'Taiwan Public Web Intelligence Workbench'}</h2>
+          <p>{story?.subtitle ?? 'Crawler governance, normalization, analytics, and Excel reporting in one workflow.'}</p>
+        </div>
+        <button className="primary-action large-action" type="button" onClick={onRunDemo} disabled={running}>
+          <PlayCircle size={18} />
+          {running ? 'Generating dataset...' : 'Run demo workflow'}
+        </button>
+      </div>
+
+      <div className="walkthrough-track">
+        {(story?.walkthrough_steps ?? []).map((step) => (
+          <button
+            key={step.key}
+            className={activeStep?.key === step.key ? 'story-step active' : 'story-step'}
+            type="button"
+            onClick={() => setSelectedStep(step)}
+          >
+            <span className="step-index">{step.index}</span>
+            <strong>{step.label}</strong>
+            <small>{step.purpose}</small>
+            <StatusBadge value={step.status} />
+          </button>
+        ))}
+      </div>
+
+      <StoryStepDetail step={activeStep} />
+
+      <div className="panel wide-panel">
+        <div className="panel-header">
+          <h2>Engineering Capabilities Shown</h2>
+          <span className="pill">interview talking points</span>
+        </div>
+        <div className="highlight-grid">
+          {(story?.interview_highlights ?? []).map((highlight) => (
+            <div className="highlight-card" key={highlight}>
+              <Sparkles size={17} />
+              <span>{highlight}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StoryStepDetail({ step }: { step: DemoStoryStep | null }) {
+  if (!step) {
+    return <div className="panel"><div className="empty-state">Run or load demo story data.</div></div>;
+  }
+  return (
+    <aside className="panel story-detail-panel">
+      <div className="panel-header">
+        <h2>{step.label}</h2>
+        <StatusBadge value={step.status} />
+      </div>
+      <p className="detail-purpose">{step.purpose}</p>
+      <div className="detail-section">
+        <strong>Inputs</strong>
+        <TagList items={step.inputs} />
+      </div>
+      <div className="detail-section">
+        <strong>Outputs</strong>
+        <TagList items={step.outputs} />
+      </div>
+      <div className="detail-section">
+        <strong>Tables / Artifacts</strong>
+        <TagList items={[...step.tables, step.artifact ?? 'runtime diagnostics']} />
+      </div>
+      <div className="detail-section">
+        <strong>Possible Failure Modes</strong>
+        <TagList items={step.failure_modes} tone="danger" />
+      </div>
+      <div className="compliance-callout">
+        <ShieldCheck size={18} />
+        <span>{step.compliance}</span>
+      </div>
+      <div className="engineering-note">{step.engineering_highlight}</div>
+    </aside>
+  );
+}
+
+function ArchitectureMapPage({
+  graph,
+  story,
+}: {
+  graph: StoryGraph | null;
+  story: DemoStoryAnalytics | null;
+}) {
+  return (
+    <section className="flow-layout">
+      <StoryGraphPanel graph={graph} title="System Architecture Map" />
+      <aside className="panel node-detail-panel">
+        <div className="panel-header"><h2>Architecture Narrative</h2></div>
+        <div className="metadata-list">
+          <div className="metadata-row"><strong>Sources</strong><span>Public forums, RSS feeds, sitemap targets, and API-first connectors.</span></div>
+          <div className="metadata-row"><strong>Crawler Core</strong><span>Rate limit, robots guard, request budget, retry, policy errors, and provenance.</span></div>
+          <div className="metadata-row"><strong>Storage</strong><span>SQLite tables preserve source, job, normalized post, metrics, and export lineage.</span></div>
+          <div className="metadata-row"><strong>Presentation</strong><span>FastAPI serves analytics payloads into React charts and Excel exports.</span></div>
+        </div>
+        <div className="demo-guide-metrics vertical">
+          <span>{story?.kpis.total_sources ?? 0} sources</span>
+          <span>{story?.kpis.total_posts ?? 0} normalized posts</span>
+          <span>{story?.kpis.successful_crawl_runs ?? 0} successful runs</span>
+        </div>
+      </aside>
+    </section>
+  );
+}
+
+function LifecycleStoryPage({
+  graph,
+  story,
+}: {
+  graph: StoryGraph | null;
+  story: DemoStoryAnalytics | null;
+}) {
+  return (
+    <section className="page-grid analytics-grid">
+      <div className="wide-panel">
+        <StoryGraphPanel graph={graph} title="Raw Data to Excel Lineage" />
+      </div>
+      <div className="panel">
+        <div className="panel-header"><h2>Lifecycle Explanation</h2></div>
+        <div className="metadata-list">
+          <div className="metadata-row"><strong>Raw response</strong><span>Public JSON, RSS XML, or HTML fetched with provenance.</span></div>
+          <div className="metadata-row"><strong>Parsed item</strong><span>Connector extracts title, content, date, board, URL, and metrics.</span></div>
+          <div className="metadata-row"><strong>Normalized post</strong><span>Cross-platform schema enables one analytics pipeline.</span></div>
+          <div className="metadata-row"><strong>Analysis output</strong><span>Keyword, quality, engagement, trend, and Excel report artifacts.</span></div>
+        </div>
+      </div>
+      <div className="panel">
+        <div className="panel-header"><h2>Demo Data Mix</h2></div>
+        <div className="ratio-meter">
+          <div style={{ width: `${story?.demo_live_ratio.total ? (story.demo_live_ratio.demo / story.demo_live_ratio.total) * 100 : 0}%` }} />
+        </div>
+        <div className="metadata-list">
+          <div className="metadata-row"><strong>Demo rows</strong><span>{story?.demo_live_ratio.demo ?? 0}</span></div>
+          <div className="metadata-row"><strong>Live rows</strong><span>{story?.demo_live_ratio.live ?? 0}</span></div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StoryGraphPanel({ graph, title }: { graph: StoryGraph | null; title: string }) {
+  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const nodes = (graph?.nodes ?? []).map((node) => ({
+    id: node.id,
+    position: node.position ?? { x: 0, y: 0 },
+    data: { label: node.label ?? node.id, ...node },
+    className: `flow-node story-node-${node.type ?? 'default'}`,
+  })) as Node[];
+  const edges = (graph?.edges ?? []).map((edge, index) => ({ id: edge.id ?? `${edge.source}-${edge.target}-${index}`, ...edge })) as Edge[];
+  return (
+    <div className="story-graph-grid">
+      <div className="panel flow-panel story-flow-panel">
+        <div className="panel-header">
+          <h2>{title}</h2>
+          <span className="pill">click nodes</span>
+        </div>
+        <ReactFlow nodes={nodes} edges={edges} fitView onNodeClick={(_, node) => setSelectedNode(node as unknown as GraphNode)}>
+          <MiniMap />
+          <Controls />
+          <Background />
+        </ReactFlow>
+      </div>
+      <NodeDetailPanel node={selectedNode ?? (graph?.nodes[0] ?? null)} title="Selected Node" />
+    </div>
+  );
 }
 
 function OverviewDashboard({
@@ -1011,7 +1287,13 @@ function NodeDetailPanel({ node, title }: { node: GraphNode | null; title: strin
           {Object.entries(payload).map(([key, value]) => (
             <div className="metadata-row" key={key}>
               <strong>{key}</strong>
-              <span>{typeof value === 'object' ? JSON.stringify(value) : String(value ?? '-')}</span>
+              <span>
+                {Array.isArray(value)
+                  ? value.join(', ')
+                  : typeof value === 'object'
+                    ? JSON.stringify(value)
+                    : String(value ?? '-')}
+              </span>
             </div>
           ))}
         </div>
@@ -1019,6 +1301,14 @@ function NodeDetailPanel({ node, title }: { node: GraphNode | null; title: strin
         <div className="empty-state">Click a node.</div>
       )}
     </aside>
+  );
+}
+
+function TagList({ items, tone = 'default' }: { items: string[]; tone?: 'default' | 'danger' }) {
+  return (
+    <div className={tone === 'danger' ? 'tag-list danger-tags' : 'tag-list'}>
+      {items.map((item) => <span key={item}>{item}</span>)}
+    </div>
   );
 }
 

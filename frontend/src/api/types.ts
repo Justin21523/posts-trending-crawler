@@ -269,3 +269,42 @@ export type DataQualityTableAnalytics = {
   failed_crawls: Array<Record<string, unknown>>;
   policy_blocks: Array<Record<string, unknown>>;
 };
+
+export type DemoStoryStep = {
+  index: number;
+  key: string;
+  label: string;
+  status: string;
+  count: number;
+  purpose: string;
+  inputs: string[];
+  outputs: string[];
+  tables: string[];
+  artifact: string | null;
+  failure_modes: string[];
+  compliance: string;
+  engineering_highlight: string;
+};
+
+export type StoryGraph = {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+};
+
+export type DemoStoryAnalytics = {
+  title: string;
+  subtitle: string;
+  demo_dataset_present: boolean;
+  kpis: KPIOverview;
+  demo_live_ratio: { demo: number; live: number; total: number };
+  walkthrough_steps: DemoStoryStep[];
+  architecture: StoryGraph;
+  lifecycle: StoryGraph;
+  interview_highlights: string[];
+};
+
+export type DemoWorkflowRunResponse = {
+  status: string;
+  stats: Record<string, unknown>;
+  summary: Record<string, unknown>;
+};

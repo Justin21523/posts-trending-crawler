@@ -42,8 +42,7 @@ class APIQueryService:
         entries = catalog.entries
         with get_session() as session:
             source_rows = {
-                source.name: source
-                for source in session.execute(select(Source)).scalars().all()
+                source.name: source for source in session.execute(select(Source)).scalars().all()
             }
             post_counts = {
                 source_name: int(count)
@@ -367,9 +366,9 @@ class APIQueryService:
         comparisons = []
         for platform, entry in sorted(stats.items()):
             count = entry["post_count"] or 1
-            successful = job_counts[platform]["completed"] + job_counts[platform][
-                "completed_with_warnings"
-            ]
+            successful = (
+                job_counts[platform]["completed"] + job_counts[platform]["completed_with_warnings"]
+            )
             total_jobs = sum(job_counts[platform].values())
             comparisons.append(
                 {
@@ -594,6 +593,7 @@ class APIQueryService:
         x_gap = 210
         nodes = []
         for index, stage in enumerate(workflow["stages"]):
+            detail = self._workflow_stage_detail(stage["key"])
             nodes.append(
                 {
                     "id": stage["key"],
@@ -603,11 +603,17 @@ class APIQueryService:
                         "label": stage["label"],
                         "status": stage["status"],
                         "count": stage["count"],
+                        "purpose": detail["purpose"],
+                        "inputs": detail["inputs"],
+                        "outputs": detail["outputs"],
+                        "tables": detail["tables"],
+                        "failure_modes": detail["failure_modes"],
+                        "compliance": detail["compliance"],
                         "request_count": self.counts()["crawl_jobs"] if index < 4 else 0,
                         "item_count": stage["count"],
                         "failed_count": workflow["latest_error"] is not None,
                         "latest_error": stage.get("error_reason"),
-                        "output_artifact": "SQLite / JSON report" if index >= 9 else None,
+                        "output_artifact": detail["artifact"],
                     },
                 }
             )
@@ -621,6 +627,49 @@ class APIQueryService:
             for index in range(len(workflow["stages"]) - 1)
         ]
         return {"nodes": nodes, "edges": edges}
+
+    def analytics_demo_story(self) -> dict[str, Any]:
+        """Return interview-demo story data for visual operation guides."""
+        overview = self.analytics_overview()
+        dashboard = self.analytics_dashboard()
+        workflow = self.workflow_summary()
+        steps = []
+        for index, stage in enumerate(workflow["stages"], start=1):
+            detail = self._workflow_stage_detail(stage["key"])
+            steps.append(
+                {
+                    "index": index,
+                    "key": stage["key"],
+                    "label": stage["label"],
+                    "status": stage["status"],
+                    "count": stage["count"],
+                    "purpose": detail["purpose"],
+                    "inputs": detail["inputs"],
+                    "outputs": detail["outputs"],
+                    "tables": detail["tables"],
+                    "artifact": detail["artifact"],
+                    "failure_modes": detail["failure_modes"],
+                    "compliance": detail["compliance"],
+                    "engineering_highlight": detail["engineering_highlight"],
+                }
+            )
+        return {
+            "title": "Taiwan Public Web Intelligence Workbench",
+            "subtitle": "Public-data crawler governance, analytics, and Excel reporting.",
+            "demo_dataset_present": overview["demo_dataset_present"],
+            "kpis": overview["kpis"],
+            "demo_live_ratio": dashboard["demo_live_ratio"],
+            "walkthrough_steps": steps,
+            "architecture": self._architecture_graph(),
+            "lifecycle": self._lifecycle_graph(),
+            "interview_highlights": [
+                "Public-source governance runs before crawler requests.",
+                "Connectors normalize forums, RSS/news, and APIs into one schema.",
+                "SQLite lineage links jobs, posts, quality checks, analytics, and exports.",
+                "Fail-closed compliance records 403, 429, CAPTCHA, login, and robots events.",
+                "Excel/CSV/SQLite analytics make the project useful beyond crawling.",
+            ],
+        }
 
     def analytics_top_posts(self) -> dict[str, Any]:
         """Return top post table rows."""
@@ -727,6 +776,253 @@ class APIQueryService:
             ],
         }
 
+    @staticmethod
+    def _workflow_stage_detail(key: str) -> dict[str, Any]:
+        details = {
+            "source_select": {
+                "purpose": "Choose a public, cataloged source before any network request.",
+                "inputs": ["configs/sources.yaml", "sources table", "enabled source filters"],
+                "outputs": ["connector target", "source_id", "crawl job intent"],
+                "tables": ["sources"],
+                "artifact": "selected source catalog entry",
+                "failure_modes": [
+                    "source disabled",
+                    "missing catalog entry",
+                    "unsupported connector",
+                ],
+                "compliance": "Only configured public sources are eligible for crawling.",
+                "engineering_highlight": "Source registry separates intent from connector code.",
+            },
+            "policy_check": {
+                "purpose": "Evaluate platform policy, stop conditions, budget, and source health.",
+                "inputs": ["crawler policy settings", "source metadata", "latest crawl jobs"],
+                "outputs": ["allow / slow down / fail-closed decision", "error_category"],
+                "tables": ["crawl_jobs"],
+                "artifact": "policy decision in crawl job diagnostics",
+                "failure_modes": [
+                    "http_403_forbidden",
+                    "http_429_rate_limited",
+                    "captcha_detected",
+                    "login_required",
+                ],
+                "compliance": "The crawler records blocks and stops; it never attempts bypass.",
+                "engineering_highlight": "Anti-bot handling is diagnostic and conservative.",
+            },
+            "robots_check": {
+                "purpose": "Check robots.txt and domain rules before fetching public pages.",
+                "inputs": ["robots_url", "target_url", "user agent policy"],
+                "outputs": ["robots allowed/disallowed/unavailable status"],
+                "tables": ["crawl_jobs"],
+                "artifact": "robots decision in structured logs",
+                "failure_modes": ["robots_disallowed", "robots_unavailable"],
+                "compliance": "Robots disallow fails closed; unavailable robots needs policy.",
+                "engineering_highlight": "Robots handling is centralized in crawler core.",
+            },
+            "request_budget": {
+                "purpose": "Limit request volume per job and cool down domains after rate limits.",
+                "inputs": ["request_budget_per_job", "per-domain rate limiter", "cooldown config"],
+                "outputs": ["remaining budget", "cooldown state", "request_count"],
+                "tables": ["crawl_jobs"],
+                "artifact": "request counters and domain cooldown logs",
+                "failure_modes": ["request_budget_exceeded", "domain_cooldown_active"],
+                "compliance": "Small, polite crawl budgets reduce server pressure.",
+                "engineering_highlight": "Budgeting makes live verification safe and repeatable.",
+            },
+            "fetch_listing": {
+                "purpose": "Fetch listing, RSS, sitemap, or API index data through connectors.",
+                "inputs": ["connector target", "http client", "rate limiter"],
+                "outputs": ["raw listing payload", "candidate item URLs/IDs"],
+                "tables": ["crawl_jobs"],
+                "artifact": "listing response metadata",
+                "failure_modes": ["empty listing", "parser mismatch", "network timeout"],
+                "compliance": "Uses public endpoints/pages and honors fail-closed policy errors.",
+                "engineering_highlight": "API-first and RSS/sitemap-first reduce brittle scraping.",
+            },
+            "fetch_detail": {
+                "purpose": "Fetch public detail pages or API detail payloads for selected items.",
+                "inputs": ["candidate items", "max_posts", "checkpoint state"],
+                "outputs": ["raw detail JSON/HTML", "detail fetch provenance"],
+                "tables": ["crawl_jobs"],
+                "artifact": "detail response metadata",
+                "failure_modes": ["detail blocked", "not found", "login wall"],
+                "compliance": "Blocked detail pages are recorded and skipped; no bypass.",
+                "engineering_highlight": "Checkpoint-friendly detail fetches support resume.",
+            },
+            "parse": {
+                "purpose": "Parse JSON, RSS XML, or HTML into intermediate records.",
+                "inputs": ["raw payload", "connector parser", "html/text utilities"],
+                "outputs": ["parsed title/content/metadata fields"],
+                "tables": ["crawl_jobs"],
+                "artifact": "parser diagnostics and skipped item reasons",
+                "failure_modes": ["missing title", "missing content", "invalid date"],
+                "compliance": "Parser handles only captured public content and metadata.",
+                "engineering_highlight": "Parsing is connector-specific; contracts stay shared.",
+            },
+            "normalize": {
+                "purpose": "Convert platform records into the NormalizedPost schema.",
+                "inputs": ["parsed item", "source_id", "platform metadata"],
+                "outputs": ["NormalizedPost", "content_hash", "canonical fields"],
+                "tables": ["posts"],
+                "artifact": "normalized post payload",
+                "failure_modes": [
+                    "invalid schema",
+                    "missing external_id",
+                    "unsupported platform field",
+                ],
+                "compliance": "Normalization excludes credentials, cookies, and non-public data.",
+                "engineering_highlight": "One schema powers analysis and Excel export.",
+            },
+            "validate": {
+                "purpose": "Check completeness, timestamps, content length, and quality flags.",
+                "inputs": ["NormalizedPost", "quality rules"],
+                "outputs": ["quality counters", "warnings", "accepted/skipped decision"],
+                "tables": ["posts", "crawl_jobs"],
+                "artifact": "data quality table rows",
+                "failure_modes": ["empty content", "invalid date", "malformed URL"],
+                "compliance": "Quality warnings are visible instead of hidden in logs.",
+                "engineering_highlight": "Data quality becomes visible UI output, not silent logs.",
+            },
+            "deduplicate": {
+                "purpose": "Use source/external ID and content hash to avoid duplicate records.",
+                "inputs": ["source_id", "external_id", "content_hash"],
+                "outputs": ["insert/update decision", "duplicate counters"],
+                "tables": ["posts"],
+                "artifact": "upsert result",
+                "failure_modes": ["duplicate hash", "conflicting external_id"],
+                "compliance": "Deduplication reduces unnecessary repeated processing.",
+                "engineering_highlight": "Upsert behavior keeps repeated crawls idempotent.",
+            },
+            "store": {
+                "purpose": "Persist sources, jobs, normalized posts, metrics, and report metadata.",
+                "inputs": ["NormalizedPost", "crawl job lifecycle", "metrics"],
+                "outputs": ["SQLite rows", "queryable analytics dataset"],
+                "tables": ["sources", "crawl_jobs", "posts", "post_metrics"],
+                "artifact": "SQLite database",
+                "failure_modes": ["schema mismatch", "database write error"],
+                "compliance": "Stored provenance keeps public-source origin visible.",
+                "engineering_highlight": "SQLite keeps local data with clear lineage.",
+            },
+            "analyze_export": {
+                "purpose": "Aggregate trends, keywords, engagement, health, and Excel sheets.",
+                "inputs": ["SQLite posts", "crawl jobs", "keyword dictionary"],
+                "outputs": ["charts", "analytics API payloads", "Excel/CSV/JSON reports"],
+                "tables": ["posts", "crawl_jobs", "exports"],
+                "artifact": "Excel report / analytics dashboard",
+                "failure_modes": ["empty dataset", "missing metrics", "export path unavailable"],
+                "compliance": "Reports label demo data and keep blocked crawl reasons visible.",
+                "engineering_highlight": "The crawler feeds analysis, not just raw collection.",
+            },
+        }
+        return details[key]
+
+    @staticmethod
+    def _architecture_graph() -> dict[str, Any]:
+        nodes = [
+            {
+                "id": "sources",
+                "label": "Public Sources",
+                "type": "source",
+                "position": {"x": 0, "y": 80},
+            },
+            {
+                "id": "connectors",
+                "label": "Connectors",
+                "type": "connector",
+                "position": {"x": 220, "y": 80},
+            },
+            {
+                "id": "core",
+                "label": "Crawler Core",
+                "type": "core",
+                "position": {"x": 440, "y": 80},
+            },
+            {
+                "id": "sqlite",
+                "label": "SQLite Store",
+                "type": "database",
+                "position": {"x": 660, "y": 80},
+            },
+            {
+                "id": "analytics",
+                "label": "Analytics API",
+                "type": "api",
+                "position": {"x": 880, "y": 20},
+            },
+            {
+                "id": "react",
+                "label": "React Dashboard",
+                "type": "ui",
+                "position": {"x": 1100, "y": 20},
+            },
+            {
+                "id": "excel",
+                "label": "Excel Export",
+                "type": "export",
+                "position": {"x": 1100, "y": 150},
+            },
+        ]
+        edges = [
+            {"source": "sources", "target": "connectors", "label": "select target"},
+            {"source": "connectors", "target": "core", "label": "fetch/parse contract"},
+            {"source": "core", "target": "sqlite", "label": "normalize/store"},
+            {"source": "sqlite", "target": "analytics", "label": "query"},
+            {"source": "analytics", "target": "react", "label": "visualize"},
+            {"source": "sqlite", "target": "excel", "label": "export"},
+        ]
+        return {"nodes": nodes, "edges": edges}
+
+    @staticmethod
+    def _lifecycle_graph() -> dict[str, Any]:
+        nodes = [
+            {"id": "raw", "label": "Raw Response", "type": "raw", "position": {"x": 0, "y": 80}},
+            {
+                "id": "parsed",
+                "label": "Parsed Item",
+                "type": "parse",
+                "position": {"x": 190, "y": 80},
+            },
+            {
+                "id": "post",
+                "label": "Normalized Post",
+                "type": "post",
+                "position": {"x": 380, "y": 80},
+            },
+            {
+                "id": "hash",
+                "label": "Dedupe Hash",
+                "type": "quality",
+                "position": {"x": 570, "y": 20},
+            },
+            {
+                "id": "keyword",
+                "label": "Keyword Match",
+                "type": "analysis",
+                "position": {"x": 570, "y": 140},
+            },
+            {
+                "id": "chart",
+                "label": "Analytics Chart",
+                "type": "analysis",
+                "position": {"x": 760, "y": 80},
+            },
+            {
+                "id": "excel",
+                "label": "Excel Sheet",
+                "type": "export",
+                "position": {"x": 950, "y": 80},
+            },
+        ]
+        edges = [
+            {"source": "raw", "target": "parsed", "label": "parse"},
+            {"source": "parsed", "target": "post", "label": "normalize"},
+            {"source": "post", "target": "hash", "label": "dedupe"},
+            {"source": "post", "target": "keyword", "label": "analyze text"},
+            {"source": "keyword", "target": "chart", "label": "aggregate"},
+            {"source": "hash", "target": "chart", "label": "quality flags"},
+            {"source": "chart", "target": "excel", "label": "export"},
+        ]
+        return {"nodes": nodes, "edges": edges}
+
     def _crawl_status_counts(self) -> list[dict[str, Any]]:
         with get_session() as session:
             rows = session.execute(
@@ -803,8 +1099,7 @@ class APIQueryService:
                 if count:
                     counter[keyword] += count
         return [
-            {"keyword": keyword, "count": count}
-            for keyword, count in counter.most_common(limit)
+            {"keyword": keyword, "count": count} for keyword, count in counter.most_common(limit)
         ]
 
     def _top_posts(self, session, *, limit: int) -> list[dict[str, Any]]:
@@ -943,3 +1238,9 @@ class APIControlService:
             forum=forum,
             sample_post_id=sample_post_id,
         )
+
+    def run_demo_workflow(self, *, rows: int = 2000, reset_demo: bool = True) -> dict[str, Any]:
+        """Seed demo data for the interactive portfolio walkthrough."""
+        from dcard_crawler.services.demo_seed import DemoSeedService
+
+        return DemoSeedService().seed(rows=rows, reset_demo=reset_demo)

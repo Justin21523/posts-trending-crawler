@@ -6,6 +6,8 @@ import type {
   DataQualityTableAnalytics,
   DashboardAnalytics,
   DashboardSummary,
+  DemoStoryAnalytics,
+  DemoWorkflowRunResponse,
   DiagnosticsResponse,
   EngagementAnalytics,
   KeywordHeatmapAnalytics,
@@ -102,5 +104,16 @@ export const api = {
     crawlFlow: () => request<CrawlFlowAnalytics>('/analytics/crawl-flow'),
     topPosts: () => request<{ rows: PostResponse[] | Array<Record<string, unknown>> }>('/analytics/top-posts'),
     dataQualityTable: () => request<DataQualityTableAnalytics>('/analytics/data-quality-table'),
+    demoStory: () => request<DemoStoryAnalytics>('/analytics/demo-story'),
+  },
+  demo: {
+    runWorkflow: (payload: { rows?: number; reset_demo?: boolean } = {}) =>
+      request<DemoWorkflowRunResponse>(
+        `/demo/workflow/run${queryString({
+          rows: payload.rows ?? 2000,
+          reset_demo: payload.reset_demo === undefined ? 'true' : String(payload.reset_demo),
+        })}`,
+        { method: 'POST' },
+      ),
   },
 };

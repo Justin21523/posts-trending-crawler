@@ -16,6 +16,12 @@ from dcard_crawler.settings import settings
 
 
 class FakeControlService:
+    def run_demo_workflow(self, **kwargs):
+        return DemoSeedService().seed(
+            rows=kwargs.get("rows", 120),
+            reset_demo=kwargs.get("reset_demo", True),
+        )
+
     async def verify_dcard(self, **kwargs):
         return fake_verify_report("dcard", "dcard")
 
@@ -219,5 +225,30 @@ def test_api_visualization_endpoints_after_demo_seed(tmp_path, monkeypatch):
     assert source_health.json()["rows"]
     assert lineage.json()["nodes"]
     assert crawl_flow.json()["nodes"][0]["data"]["label"] == "Source Select"
+    assert crawl_flow.json()["nodes"][1]["data"]["compliance"]
     assert top_posts.json()["rows"]
     assert "missing_content" in quality_table.json()
+
+
+def test_api_demo_story_and_run_workflow(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
+    monkeypatch.chdir(tmp_path)
+    init_db(reset=True)
+    client = TestClient(create_app(control_service=FakeControlService()))
+
+    run = client.post("/demo/workflow/run", params={"rows": 120, "reset_demo": True})
+    story = client.get("/analytics/demo-story")
+    posts = client.get("/posts", params={"source": "demo-ptt", "limit": 5})
+
+    assert run.status_code == 200
+    assert run.json()["status"] == "completed"
+    assert run.json()["stats"]["posts_inserted"] == 120
+    assert story.status_code == 200
+    assert story.json()["walkthrough_steps"][0]["label"] == "Source Select"
+    assert story.json()["architecture"]["nodes"]
+    assert story.json()["lifecycle"]["edges"]
+    assert any(
+        "fail-closed" in step["compliance"]
+        for step in story.json()["walkthrough_steps"]
+    )
+    assert posts.json()

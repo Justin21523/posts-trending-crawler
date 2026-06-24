@@ -167,9 +167,28 @@ def create_app(
     def analytics_data_quality_table():
         return queries.analytics_data_quality_table()
 
+    @app.get("/analytics/demo-story")
+    def analytics_demo_story():
+        return queries.analytics_demo_story()
+
     @app.get("/workflow/summary")
     def workflow_summary():
         return queries.workflow_summary()
+
+    @app.post("/demo/workflow/run")
+    def run_demo_workflow(
+        rows: int = Query(2000, ge=100, le=5000),
+        reset_demo: bool = True,
+    ):
+        stats = controls.run_demo_workflow(rows=rows, reset_demo=reset_demo)
+        return {
+            "status": "completed",
+            "stats": stats,
+            "summary": {
+                "counts": queries.counts(),
+                "demo_story": queries.analytics_demo_story(),
+            },
+        }
 
     @app.post("/verify/dcard", response_model=VerifyResponse)
     async def verify_dcard(request: VerifyDcardRequest):
