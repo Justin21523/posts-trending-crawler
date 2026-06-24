@@ -1570,6 +1570,139 @@ h2 {
   pointer-events: none;
 }
 
+.guided-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 32;
+  pointer-events: none;
+}
+
+.stage-spotlight {
+  overflow: hidden;
+  animation: stageSpotlightPulse 1.8s ease-in-out infinite;
+}
+
+.stage-scanline {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(14, 165, 233, 0.2) 48%, transparent 58%);
+  animation: stageScan 2.4s linear infinite;
+}
+
+.stage-corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-color: #06b6d4;
+}
+
+.stage-corner-tl {
+  top: 8px;
+  left: 8px;
+  border-top: 4px solid;
+  border-left: 4px solid;
+}
+
+.stage-corner-tr {
+  top: 8px;
+  right: 8px;
+  border-top: 4px solid;
+  border-right: 4px solid;
+}
+
+.stage-corner-bl {
+  bottom: 8px;
+  left: 8px;
+  border-bottom: 4px solid;
+  border-left: 4px solid;
+}
+
+.stage-corner-br {
+  right: 8px;
+  bottom: 8px;
+  border-right: 4px solid;
+  border-bottom: 4px solid;
+}
+
+.stage-flow-line {
+  position: fixed;
+  z-index: 36;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.22);
+  pointer-events: none;
+}
+
+.stage-flow-line span {
+  display: block;
+  width: 86px;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, #38bdf8, #f59e0b);
+  animation: stageFlow 1.9s ease-in-out infinite;
+}
+
+.stage-particle {
+  position: fixed;
+  z-index: 37;
+  width: 11px;
+  height: 11px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 0 8px rgba(34, 197, 94, 0.14), 0 0 22px rgba(34, 197, 94, 0.65);
+  animation: stageParticleDrift 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.stage-actor {
+  position: fixed;
+  z-index: 38;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 190px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 38px rgba(15, 23, 42, 0.2);
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 900;
+  animation: stageActorFloat 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.stage-actor-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #ffffff;
+  font-size: 10px;
+}
+
+.stage-actor-parser .stage-actor-icon,
+.stage-actor-analytics .stage-actor-icon {
+  background: var(--color-secondary);
+}
+
+.stage-actor-policy .stage-actor-icon {
+  background: var(--color-warning);
+}
+
+.stage-actor-export .stage-actor-icon {
+  background: #7c3aed;
+}
+
+.stage-actor-database .stage-actor-icon {
+  background: #0891b2;
+}
+
 .tour-arrow {
   position: fixed;
   z-index: 36;
@@ -1652,6 +1785,34 @@ h2 {
   line-height: 1.45;
 }
 
+.assistant-evidence {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0;
+}
+
+.assistant-evidence > span {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.assistant-evidence div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.assistant-evidence strong,
+.assistant-evidence small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .journey-studio {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.8fr);
@@ -1681,6 +1842,145 @@ h2 {
   overflow: hidden;
 }
 
+.journey-transform-stage {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.12), transparent 24%),
+    radial-gradient(circle at 90% 20%, rgba(15, 118, 110, 0.12), transparent 26%),
+    #ffffff;
+}
+
+.transform-stage-lane {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.transform-stage-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 220px;
+  padding: 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  text-align: left;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.transform-stage-card:hover,
+.transform-stage-card.active {
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 18px 38px rgba(37, 99, 235, 0.16);
+  transform: translateY(-3px);
+}
+
+.transform-stage-card.active::after {
+  position: absolute;
+  inset: 8px;
+  border: 1px dashed rgba(245, 158, 11, 0.48);
+  border-radius: 8px;
+  content: "";
+  pointer-events: none;
+  animation: stageDash 2s linear infinite;
+}
+
+.transform-stage-index {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 900;
+}
+
+.transform-stage-card strong {
+  color: var(--color-text);
+  font-size: 15px;
+}
+
+.transform-stage-card small {
+  color: var(--color-muted);
+  line-height: 1.45;
+}
+
+.transform-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.transform-chip-row span {
+  max-width: 100%;
+  padding: 5px 7px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.transform-connector {
+  position: absolute;
+  top: 50%;
+  right: -17px;
+  z-index: 2;
+  width: 24px;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-warning));
+  box-shadow: 0 0 16px rgba(37, 99, 235, 0.45);
+}
+
+.transform-connector::after {
+  position: absolute;
+  top: -5px;
+  right: -2px;
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 9px solid var(--color-warning);
+  content: "";
+}
+
+.transform-stage-footer {
+  position: relative;
+  height: 54px;
+  margin-top: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.08), rgba(15, 118, 110, 0.08));
+  overflow: hidden;
+}
+
+.moving-payload {
+  position: absolute;
+  top: 11px;
+  left: -180px;
+  padding: 8px 11px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 900;
+  animation: payloadMove 7s linear infinite;
+}
+
+.moving-payload.delay-1 { animation-delay: 1.5s; }
+.moving-payload.delay-2 { animation-delay: 3s; }
+.moving-payload.delay-3 { animation-delay: 4.5s; }
+
 .journey-flow {
   height: 500px;
 }
@@ -1709,6 +2009,42 @@ h2 {
 @keyframes dataPacketPulse {
   0%, 100% { transform: scaleX(0.72); opacity: 0.55; }
   50% { transform: scaleX(1); opacity: 1; }
+}
+
+@keyframes stageSpotlightPulse {
+  0%, 100% { box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.18), 0 0 0 8px rgba(245, 158, 11, 0.16), 0 18px 44px rgba(15, 23, 42, 0.28); }
+  50% { box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.2), 0 0 0 14px rgba(14, 165, 233, 0.22), 0 24px 58px rgba(15, 23, 42, 0.32); }
+}
+
+@keyframes stageScan {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(100%); }
+}
+
+@keyframes stageFlow {
+  0% { transform: translateX(-96px); opacity: 0; }
+  20%, 80% { opacity: 1; }
+  100% { transform: translateX(calc(100vw / 2)); opacity: 0; }
+}
+
+@keyframes stageParticleDrift {
+  0%, 100% { transform: translate(0, 0) scale(0.84); opacity: 0.62; }
+  50% { transform: translate(16px, -14px) scale(1.12); opacity: 1; }
+}
+
+@keyframes stageActorFloat {
+  0%, 100% { margin-top: 0; }
+  50% { margin-top: -9px; }
+}
+
+@keyframes stageDash {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.95; }
+}
+
+@keyframes payloadMove {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(100vw + 260px)); }
 }
 
 .journey-step-panel {
@@ -2100,12 +2436,42 @@ td p {
   .page-grid,
   .catalog-grid,
   .flow-layout,
+  .journey-studio,
   .story-layout,
   .story-graph-grid,
   .source-layout,
   .filters,
   .workflow-grid {
     grid-template-columns: 1fr;
+  }
+
+  .transform-stage-lane {
+    grid-template-columns: 1fr;
+  }
+
+  .transform-connector {
+    top: auto;
+    right: auto;
+    bottom: -13px;
+    left: 34px;
+    width: 4px;
+    height: 24px;
+  }
+
+  .transform-connector::after {
+    top: auto;
+    right: -5px;
+    bottom: -4px;
+    border-top: 9px solid var(--color-warning);
+    border-right: 7px solid transparent;
+    border-left: 7px solid transparent;
+    border-bottom: 0;
+  }
+
+  .stage-actor {
+    max-width: 150px;
+    padding: 7px 9px;
+    font-size: 11px;
   }
 
   .detail-grid {
@@ -2143,5 +2509,29 @@ td p {
 
   .control-grid {
     grid-template-columns: 1fr;
+  }
+
+  .assistant-card {
+    right: 14px;
+    bottom: 14px;
+  }
+
+  .stage-actor,
+  .stage-particle,
+  .stage-flow-line {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-spotlight,
+  .stage-scanline,
+  .stage-flow-line span,
+  .stage-particle,
+  .stage-actor,
+  .data-packet.active,
+  .transform-stage-card.active::after,
+  .moving-payload {
+    animation: none;
   }
 }

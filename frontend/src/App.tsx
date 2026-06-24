@@ -37,7 +37,7 @@ import {
   TrendingUp,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { select, zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3';
@@ -127,6 +127,16 @@ type PageKey =
   | 'settings';
 
 type Language = 'zh' | 'en';
+type TourEffectType = 'data-flow' | 'policy-scan' | 'graph-focus' | 'lineage-trace' | 'report-export';
+type StageActor = {
+  label: Record<Language, string>;
+  kind: 'record' | 'parser' | 'policy' | 'database' | 'analytics' | 'export';
+  position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'left' | 'right';
+};
+type EvidenceItem = {
+  label: Record<Language, string>;
+  value: string;
+};
 
 const pages: Array<{ key: PageKey; labelKey: string; icon: typeof Activity }> = [
   { key: 'overview', labelKey: 'page.overview', icon: BarChart3 },
@@ -203,6 +213,10 @@ const messages: Record<Language, Record<string, string>> = {
     'assistant.prev': '上一步',
     'assistant.skip': '略過',
     'assistant.done': '完成',
+    'assistant.target': '目前定位',
+    'assistant.jump': '跳到位置',
+    'assistant.evidence': '展示證據',
+    'assistant.ability': '工程能力',
     'reports.generate': '產生 Excel 報表',
     'reports.generating': '產生中...',
     'reports.generator': 'Excel 報表產生器',
@@ -248,6 +262,10 @@ const messages: Record<Language, Record<string, string>> = {
     'assistant.prev': 'Back',
     'assistant.skip': 'Skip',
     'assistant.done': 'Done',
+    'assistant.target': 'Current target',
+    'assistant.jump': 'Jump to section',
+    'assistant.evidence': 'Demo evidence',
+    'assistant.ability': 'Engineering ability',
     'reports.generate': 'Generate Excel Report',
     'reports.generating': 'Generating...',
     'reports.generator': 'Excel Report Generator',
@@ -270,14 +288,29 @@ const tourSteps: Array<{
   page: PageKey;
   target: string;
   i18nKey: string;
+  effectType: TourEffectType;
+  stageActors: StageActor[];
+  evidence: EvidenceItem[];
   title: Record<Language, string>;
   body: Record<Language, string>;
   bullets: Record<Language, string[]>;
 }> = [
   {
     page: 'journey',
-    target: 'journey-studio',
+    target: 'journey-transform',
     i18nKey: 'journey',
+    effectType: 'data-flow',
+    stageActors: [
+      { kind: 'record', position: 'top-left', label: { zh: 'Raw Record', en: 'Raw Record' } },
+      { kind: 'parser', position: 'left', label: { zh: 'Clean + Parse', en: 'Clean + Parse' } },
+      { kind: 'analytics', position: 'right', label: { zh: 'Topic Mining', en: 'Topic Mining' } },
+      { kind: 'export', position: 'bottom-right', label: { zh: 'Excel Sheets', en: 'Excel Sheets' } },
+    ],
+    evidence: [
+      { label: { zh: 'API', en: 'API' }, value: '/analytics/data-journey' },
+      { label: { zh: '資料表', en: 'Tables' }, value: 'posts / post_metrics / exports' },
+      { label: { zh: '輸出', en: 'Output' }, value: 'Excel report artifacts' },
+    ],
     title: { zh: '跟著一筆資料走完整流程', en: 'Follow one record through the pipeline' },
     body: {
       zh: '這裡把 raw record、清理、標準化、topic mining、趨勢分析和 Excel export 串成可視化旅程。',
@@ -292,6 +325,16 @@ const tourSteps: Array<{
     page: 'overview',
     target: 'overview-kpis',
     i18nKey: 'overview',
+    effectType: 'graph-focus',
+    stageActors: [
+      { kind: 'database', position: 'top-left', label: { zh: 'SQLite Summary', en: 'SQLite Summary' } },
+      { kind: 'analytics', position: 'right', label: { zh: 'KPI Aggregation', en: 'KPI Aggregation' } },
+      { kind: 'record', position: 'bottom-left', label: { zh: 'Demo / Live Split', en: 'Demo / Live Split' } },
+    ],
+    evidence: [
+      { label: { zh: 'API', en: 'API' }, value: '/analytics/dashboard' },
+      { label: { zh: '能力', en: 'Capability' }, value: 'cross-source KPI aggregation' },
+    ],
     title: { zh: '先看總覽 KPI', en: 'Start with overview KPIs' },
     body: {
       zh: '這裡快速展示資料來源、文章量、crawl jobs 與 API 狀態，讓面試官先理解系統規模。',
@@ -306,6 +349,16 @@ const tourSteps: Array<{
     page: 'demo',
     target: 'demo-workflow',
     i18nKey: 'demo',
+    effectType: 'data-flow',
+    stageActors: [
+      { kind: 'record', position: 'top-left', label: { zh: 'Seed Dataset', en: 'Seed Dataset' } },
+      { kind: 'database', position: 'right', label: { zh: 'SQLite Load', en: 'SQLite Load' } },
+      { kind: 'analytics', position: 'bottom-right', label: { zh: 'Chart Refresh', en: 'Chart Refresh' } },
+    ],
+    evidence: [
+      { label: { zh: '命令', en: 'Command' }, value: 'seed-demo-data' },
+      { label: { zh: '用途', en: 'Use' }, value: 'reproducible portfolio demo' },
+    ],
     title: { zh: '執行展示資料流程', en: 'Run the demo workflow' },
     body: {
       zh: '這一步用可重現的 demo dataset 展示完整 pipeline，不依賴外部網站當下是否可抓。',
@@ -317,6 +370,17 @@ const tourSteps: Array<{
     page: 'architecture',
     target: 'architecture-map',
     i18nKey: 'architecture',
+    effectType: 'graph-focus',
+    stageActors: [
+      { kind: 'record', position: 'top-left', label: { zh: 'Sources', en: 'Sources' } },
+      { kind: 'parser', position: 'left', label: { zh: 'Connectors', en: 'Connectors' } },
+      { kind: 'database', position: 'right', label: { zh: 'SQLite', en: 'SQLite' } },
+      { kind: 'export', position: 'bottom-right', label: { zh: 'React + Excel', en: 'React + Excel' } },
+    ],
+    evidence: [
+      { label: { zh: '架構', en: 'Architecture' }, value: 'connector-based crawler core' },
+      { label: { zh: '邊界', en: 'Boundary' }, value: 'crawler / API / UI separated' },
+    ],
     title: { zh: '解釋系統架構', en: 'Explain the architecture' },
     body: { zh: '用節點圖說明 Sources、Connectors、Crawler Core、SQLite、API、React 與 Excel Export。', en: 'Use the graph to explain sources, connectors, crawler core, SQLite, API, React, and Excel export.' },
     bullets: { zh: ['點節點看 metadata', '強調 connector-based 架構'], en: ['Click nodes for metadata', 'Highlight connector-based design'] },
@@ -325,6 +389,17 @@ const tourSteps: Array<{
     page: 'workflow',
     target: 'workflow-graph',
     i18nKey: 'workflow',
+    effectType: 'policy-scan',
+    stageActors: [
+      { kind: 'policy', position: 'top-left', label: { zh: 'Robots Check', en: 'Robots Check' } },
+      { kind: 'policy', position: 'left', label: { zh: '403 / 429 Stop', en: '403 / 429 Stop' } },
+      { kind: 'parser', position: 'right', label: { zh: 'Parse + Validate', en: 'Parse + Validate' } },
+      { kind: 'database', position: 'bottom-right', label: { zh: 'Store Job Result', en: 'Store Job Result' } },
+    ],
+    evidence: [
+      { label: { zh: '原則', en: 'Policy' }, value: 'fail-closed, no bypass' },
+      { label: { zh: '紀錄', en: 'Record' }, value: 'crawl_jobs.error_message' },
+    ],
     title: { zh: '展示合規爬蟲流程', en: 'Show crawler governance flow' },
     body: { zh: '每個節點都有 inputs、outputs、failure modes 與 compliance policy。', en: 'Each node exposes inputs, outputs, failure modes, and compliance policy.' },
     bullets: { zh: ['Policy Check 不做 bypass', '403/429/CAPTCHA fail closed'], en: ['Policy Check does not bypass', '403/429/CAPTCHA fail closed'] },
@@ -333,6 +408,16 @@ const tourSteps: Array<{
     page: 'keywords',
     target: 'keyword-network',
     i18nKey: 'keyword',
+    effectType: 'graph-focus',
+    stageActors: [
+      { kind: 'analytics', position: 'top-left', label: { zh: 'Topic Cluster', en: 'Topic Cluster' } },
+      { kind: 'analytics', position: 'right', label: { zh: 'Co-occurrence', en: 'Co-occurrence' } },
+      { kind: 'record', position: 'bottom-left', label: { zh: 'Related Posts', en: 'Related Posts' } },
+    ],
+    evidence: [
+      { label: { zh: 'API', en: 'API' }, value: '/analytics/keyword-network' },
+      { label: { zh: '互動', en: 'Interaction' }, value: 'click node -> related metadata' },
+    ],
     title: { zh: '查看 Keyword Network', en: 'Explore the Keyword Network' },
     body: { zh: '不同顏色代表不同主題分群，點擊節點可看相關文章與 metadata。', en: 'Colors represent topic groups; click nodes to inspect related posts and metadata.' },
     bullets: { zh: ['圓形節點大小代表出現次數', '線條代表共同出現'], en: ['Circle size reflects frequency', 'Links show co-occurrence'] },
@@ -341,6 +426,16 @@ const tourSteps: Array<{
     page: 'compliance',
     target: 'compliance-summary',
     i18nKey: 'compliance',
+    effectType: 'policy-scan',
+    stageActors: [
+      { kind: 'policy', position: 'top-left', label: { zh: 'Robots', en: 'Robots' } },
+      { kind: 'policy', position: 'right', label: { zh: 'Rate Limit', en: 'Rate Limit' } },
+      { kind: 'database', position: 'bottom-right', label: { zh: 'Audit Trail', en: 'Audit Trail' } },
+    ],
+    evidence: [
+      { label: { zh: 'Stop 條件', en: 'Stop conditions' }, value: '403 / 429 / CAPTCHA / login wall' },
+      { label: { zh: '策略', en: 'Strategy' }, value: 'detect and record, never bypass' },
+    ],
     title: { zh: '說明合規與診斷', en: 'Explain compliance diagnostics' },
     body: { zh: '這頁把 robots、policy blocks、429/403、source health 變成可分析資料。', en: 'This page turns robots, policy blocks, 429/403, and source health into analyzable data.' },
     bullets: { zh: ['不繞過平台限制', '所有 stop condition 都可追蹤'], en: ['No platform bypass', 'Every stop condition is traceable'] },
@@ -349,6 +444,17 @@ const tourSteps: Array<{
     page: 'reports',
     target: 'report-center',
     i18nKey: 'report',
+    effectType: 'report-export',
+    stageActors: [
+      { kind: 'database', position: 'top-left', label: { zh: 'SQLite Query', en: 'SQLite Query' } },
+      { kind: 'analytics', position: 'left', label: { zh: 'Analytics Tables', en: 'Analytics Tables' } },
+      { kind: 'export', position: 'right', label: { zh: 'Excel Workbook', en: 'Excel Workbook' } },
+      { kind: 'export', position: 'bottom-right', label: { zh: 'Downloadable Artifact', en: 'Downloadable Artifact' } },
+    ],
+    evidence: [
+      { label: { zh: 'Sheets', en: 'Sheets' }, value: 'Summary / Raw Data / Trends / Keywords' },
+      { label: { zh: '格式', en: 'Formatting' }, value: 'filters, frozen headers, charts' },
+    ],
     title: { zh: '產生 Excel 報表', en: 'Generate Excel report' },
     body: { zh: '最後展示資料工程成果可以輸出成可交付的 Excel analytics report。', en: 'Finally show that the pipeline produces a deliverable Excel analytics report.' },
     bullets: { zh: ['按 Generate Excel Report', '報表會出現在 reports list'], en: ['Click Generate Excel Report', 'The report appears in the reports list'] },
@@ -960,24 +1066,7 @@ function DemoAssistant({
     <>
       <div className="tour-overlay" />
       {targetRect && (
-        <div
-          className="tour-spotlight"
-          style={{
-            top: targetRect.top - 10,
-            left: targetRect.left - 10,
-            width: targetRect.width + 20,
-            height: targetRect.height + 20,
-          }}
-        />
-      )}
-      {targetRect && (
-        <div
-          className="tour-arrow"
-          style={{
-            top: Math.min(targetRect.bottom + 12, window.innerHeight - 170),
-            left: Math.min(Math.max(targetRect.left + targetRect.width / 2, 80), window.innerWidth - 120),
-          }}
-        />
+        <GuidedStageOverlay rect={targetRect} step={current} language={language} />
       )}
       <aside className="assistant-card">
         <div className="assistant-header">
@@ -997,6 +1086,15 @@ function DemoAssistant({
             <small>{language === 'zh' ? journeyStep.description_zh : journeyStep.description}</small>
           </div>
         )}
+        <div className="assistant-evidence">
+          <span>{t('assistant.evidence')}</span>
+          {current.evidence.map((item) => (
+            <div key={`${item.label[language]}-${item.value}`}>
+              <strong>{item.label[language]}</strong>
+              <small>{item.value}</small>
+            </div>
+          ))}
+        </div>
         <ul>
           {bullets.map((item) => <li key={item}>{item}</li>)}
         </ul>
@@ -1007,7 +1105,7 @@ function DemoAssistant({
             type="button"
             onClick={() => document.querySelector(`[data-tour="${current.target}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
           >
-            跳到位置
+            {t('assistant.jump')}
           </button>
           <button type="button" onClick={onClose}>{t('assistant.skip')}</button>
           <button
@@ -1026,6 +1124,82 @@ function DemoAssistant({
         </div>
       </aside>
     </>
+  );
+}
+
+function GuidedStageOverlay({
+  rect,
+  step,
+  language,
+}: {
+  rect: DOMRect;
+  step: (typeof tourSteps)[number];
+  language: Language;
+}) {
+  const safeTop = Math.max(rect.top - 18, 10);
+  const safeLeft = Math.max(rect.left - 18, 10);
+  const safeWidth = Math.min(rect.width + 36, window.innerWidth - safeLeft - 10);
+  const safeHeight = Math.min(rect.height + 36, window.innerHeight - safeTop - 10);
+  const actorStyle = (position: StageActor['position']) => {
+    const base = { top: safeTop, left: safeLeft } as CSSProperties;
+    if (position === 'top-left') return { ...base, transform: 'translate(-12px, -48px)' };
+    if (position === 'top-right') return { ...base, left: safeLeft + safeWidth, transform: 'translate(-92%, -48px)' };
+    if (position === 'bottom-left') return { ...base, top: safeTop + safeHeight, transform: 'translate(-12px, 14px)' };
+    if (position === 'bottom-right') return { ...base, top: safeTop + safeHeight, left: safeLeft + safeWidth, transform: 'translate(-92%, 14px)' };
+    if (position === 'left') return { ...base, top: safeTop + safeHeight / 2, transform: 'translate(-112%, -50%)' };
+    return { ...base, top: safeTop + safeHeight / 2, left: safeLeft + safeWidth, transform: 'translate(12px, -50%)' };
+  };
+  return (
+    <div className={`guided-stage guided-stage-${step.effectType}`} aria-hidden="true">
+      <div
+        className="tour-spotlight stage-spotlight"
+        style={{ top: safeTop, left: safeLeft, width: safeWidth, height: safeHeight }}
+      >
+        <span className="stage-scanline" />
+        <span className="stage-corner stage-corner-tl" />
+        <span className="stage-corner stage-corner-tr" />
+        <span className="stage-corner stage-corner-bl" />
+        <span className="stage-corner stage-corner-br" />
+      </div>
+      <div
+        className="tour-arrow stage-arrow"
+        style={{
+          top: Math.min(safeTop + safeHeight + 18, window.innerHeight - 150),
+          left: Math.min(Math.max(safeLeft + safeWidth / 2, 80), window.innerWidth - 120),
+        }}
+      />
+      <div
+        className="stage-flow-line"
+        style={{
+          top: safeTop + safeHeight / 2,
+          left: safeLeft + 24,
+          width: Math.max(safeWidth - 48, 80),
+        }}
+      >
+        <span />
+      </div>
+      {Array.from({ length: 6 }).map((_, index) => (
+        <span
+          className="stage-particle"
+          key={`particle-${index}`}
+          style={{
+            top: safeTop + 22 + (index % 3) * Math.max(safeHeight / 3, 48),
+            left: safeLeft + 24 + (index * Math.max(safeWidth / 7, 42)),
+            animationDelay: `${index * 180}ms`,
+          }}
+        />
+      ))}
+      {step.stageActors.map((actor, index) => (
+        <div
+          className={`stage-actor stage-actor-${actor.kind}`}
+          key={`${actor.kind}-${actor.position}-${actor.label.en}`}
+          style={{ ...actorStyle(actor.position), animationDelay: `${index * 140}ms` }}
+        >
+          <span className="stage-actor-icon">{actor.kind.slice(0, 2).toUpperCase()}</span>
+          <strong>{actor.label[language]}</strong>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1578,6 +1752,11 @@ function DataJourneyPage({
           查看文章 Detail
         </button>
       </div>
+      <DataTransformationStage
+        journey={journey}
+        selectedStep={selectedStep}
+        onSelectStep={(id) => setSelectedStepId(id)}
+      />
       <div className="panel wide-panel journey-flow-panel">
         <DataPacketAnimation steps={steps} selectedStepId={selectedStep?.id} />
         <div className="journey-flow">
@@ -1609,6 +1788,101 @@ function DataJourneyPage({
         </div>
       </div>
     </section>
+  );
+}
+
+function DataTransformationStage({
+  journey,
+  selectedStep,
+  onSelectStep,
+}: {
+  journey: DataJourneyAnalytics | null;
+  selectedStep: JourneyStep | null;
+  onSelectStep: (id: string) => void;
+}) {
+  const { i18n } = useTranslation();
+  const steps = journey?.journey_steps ?? [];
+  const rawFields = [
+    ['title', journey?.sample_post.title],
+    ['platform', journey?.sample_post.platform],
+    ['board', journey?.sample_post.board_or_forum],
+    ['published_at', journey?.sample_post.published_at],
+  ].filter(([, value]) => value);
+  const activeIndex = Math.max(steps.findIndex((step) => step.id === selectedStep?.id), 0);
+  const stageCards = [
+    {
+      id: 'raw_source',
+      label: 'Raw record',
+      title: '公開文章原始資料',
+      description: '保留來源 URL、平台、標題、時間與 raw payload，確保後續可追溯。',
+      chips: rawFields.map(([key, value]) => `${key}: ${String(value).slice(0, 42)}`),
+    },
+    {
+      id: 'clean',
+      label: 'Clean',
+      title: '清理與欄位修正',
+      description: '處理空值、時間格式、文字長度與可分析欄位。',
+      chips: ['trim text', 'date parse', 'content length', 'metadata check'],
+    },
+    {
+      id: 'normalize',
+      label: 'Normalize',
+      title: '多平台 Schema 標準化',
+      description: '把 Dcard / PTT / News 對齊到通用 posts schema。',
+      chips: (journey?.field_mappings ?? []).slice(0, 4).map((item) => `${item.raw_field} → ${item.normalized_field}`),
+    },
+    {
+      id: 'topic_mining',
+      label: 'Topic Mining',
+      title: '主題與 Keyword 命中',
+      description: '把文字轉成可分群、可比較、可視覺化的 topic 訊號。',
+      chips: (journey?.topic_matches ?? []).slice(0, 5).map((item) => String(item.keyword ?? item.topic ?? 'topic')),
+    },
+    {
+      id: 'excel_export',
+      label: 'Excel Export',
+      title: '產出可交付報表',
+      description: '將 summary、raw data、trend、keyword、quality 寫入 Excel workbook。',
+      chips: (journey?.export_artifacts ?? []).slice(0, 4).map((item) => String(item.sheet ?? item.type ?? 'artifact')),
+    },
+  ];
+  return (
+    <div className="panel wide-panel journey-transform-stage" data-tour="journey-transform">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Animated Data Transformation</p>
+          <h2>資料如何一步步變成分析成果</h2>
+        </div>
+        <span className="pill">{selectedStep ? (i18n.language === 'zh' ? selectedStep.title_zh : selectedStep.title) : 'pipeline'}</span>
+      </div>
+      <div className="transform-stage-lane">
+        {stageCards.map((stage, index) => {
+          const isActive = index <= Math.min(activeIndex, stageCards.length - 1);
+          return (
+            <button
+              className={isActive ? 'transform-stage-card active' : 'transform-stage-card'}
+              type="button"
+              key={stage.id}
+              onClick={() => onSelectStep(steps.find((step) => step.id === stage.id)?.id ?? stage.id)}
+            >
+              <span className="transform-stage-index">{index + 1}</span>
+              <strong>{stage.title}</strong>
+              <small>{stage.description}</small>
+              <div className="transform-chip-row">
+                {stage.chips.length > 0 ? stage.chips.map((chip) => <span key={chip}>{chip}</span>) : <span>waiting for data</span>}
+              </div>
+              {index < stageCards.length - 1 && <i className="transform-connector" />}
+            </button>
+          );
+        })}
+      </div>
+      <div className="transform-stage-footer">
+        <span className="moving-payload">Raw JSON</span>
+        <span className="moving-payload delay-1">Normalized fields</span>
+        <span className="moving-payload delay-2">Topic signals</span>
+        <span className="moving-payload delay-3">Excel sheets</span>
+      </div>
+    </div>
   );
 }
 
