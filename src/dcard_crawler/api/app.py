@@ -34,7 +34,10 @@ def create_app(
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origins=[
+            *[f"http://localhost:{port}" for port in range(5173, 5181)],
+            *[f"http://127.0.0.1:{port}" for port in range(5173, 5181)],
+        ],
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],

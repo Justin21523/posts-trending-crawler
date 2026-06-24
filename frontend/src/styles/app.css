@@ -1632,6 +1632,18 @@ h2 {
   cursor: pointer;
 }
 
+.clickable-row td:last-child::after {
+  content: "↗";
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .insight-drawer {
   width: min(720px, 100vw);
 }
@@ -1811,6 +1823,19 @@ td p {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.article-detail-panel {
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+.article-content {
+  max-width: 92ch;
+  margin: 0;
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 1.8;
+  white-space: pre-wrap;
 }
 
 .status-distribution {

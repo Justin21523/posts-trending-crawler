@@ -83,11 +83,30 @@ export function PostsExplorer({
               <tr><td colSpan={5}>{t('explorer.empty')}</td></tr>
             ) : (
               posts.map((post) => (
-                <tr key={`${post.source}:${post.external_id}`}>
+                <tr
+                  className="clickable-row interactive-row"
+                  key={`${post.source}:${post.external_id}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelectPost?.(post)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onSelectPost?.(post);
+                    }
+                  }}
+                >
                   <td>{post.platform}</td>
                   <td>{post.board_or_forum ?? '-'}</td>
                   <td>
-                    <button className="link-button" type="button" onClick={() => onSelectPost?.(post)}>
+                    <button
+                      className="link-button"
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelectPost?.(post);
+                      }}
+                    >
                       {post.title}
                     </button>
                     <p>{post.excerpt || post.content || ''}</p>

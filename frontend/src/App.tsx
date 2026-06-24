@@ -1127,6 +1127,16 @@ function DetailPage() {
   const relatedPostColumns = columnsForRows(detail.related_posts);
   const relatedJobColumns = columnsForRows(detail.related_jobs);
   const sourceUrl = String(detail.metadata.url ?? detail.metadata.canonical_url ?? detail.raw_payload.url ?? '');
+  const contentText = String(detail.metadata.content ?? detail.metadata.excerpt ?? detail.raw_payload.content ?? '');
+  const metricRows: Array<[string, string | number]> = [
+    ['Platform', String(detail.metadata.platform ?? '-')],
+    ['Board / Forum', String(detail.metadata.board_or_forum ?? '-')],
+    ['Published', String(detail.metadata.published_at ?? detail.metadata.created_at ?? '-')],
+    ['Comments', Number(detail.metadata.comment_count ?? 0)],
+    ['Likes', Number(detail.metadata.like_count ?? 0)],
+    ['Views', Number(detail.metadata.view_count ?? 0)],
+    ['Content Hash', String(detail.metadata.content_hash ?? '-')],
+  ];
 
   return (
     <section className="detail-page">
@@ -1153,6 +1163,25 @@ function DetailPage() {
       {error && <div className="endpoint-matrix"><button className="endpoint-error" type="button">{error}</button></div>}
 
       <div className="detail-grid">
+        {detail.kind === 'post' && (
+          <div className="panel wide-panel article-detail-panel">
+            <div className="panel-header"><h2>{detail.title}</h2></div>
+            <p className="article-content">{contentText || t('detail.noContent')}</p>
+          </div>
+        )}
+        {detail.kind === 'post' && (
+          <div className="panel">
+            <div className="panel-header"><h2>{t('common.metadata')}</h2></div>
+            <div className="metadata-list">
+              {metricRows.map(([label, value]) => (
+                <div className="metadata-row" key={label}>
+                  <strong>{label}</strong>
+                  <span>{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="panel">
           <div className="metadata-status">
             <strong>{t('metadata.status')} / Metadata</strong>
@@ -2439,7 +2468,7 @@ function SettingsPage({ status }: { status: string }) {
           </div>
           <div className="metadata-row">
             <strong>{t('settings.apiBase')}</strong>
-            <span>http://127.0.0.1:8000</span>
+            <span>{api.runtime.baseUrl()}</span>
           </div>
         </div>
       </div>
@@ -2447,7 +2476,7 @@ function SettingsPage({ status }: { status: string }) {
         <div className="panel-header">
           <h2>{t('settings.commands')}</h2>
         </div>
-        <code className="command-block">dcard-crawler seed-demo-data --rows 2000 --reset-demo</code>
+        <code className="command-block">dcard-crawler seed-demo-data --rows 10000 --reset-demo</code>
         <code className="command-block">dcard-crawler export-excel-report --output data/exports/analysis_report.xlsx</code>
       </div>
     </section>
@@ -2489,9 +2518,18 @@ function DataTable({
         <tbody>
           {table.getRowModel().rows.map((row) => (
             <tr
-              className={onRowSelect ? 'clickable-row' : undefined}
+              className={onRowSelect ? 'clickable-row interactive-row' : undefined}
               key={row.id}
+              role={onRowSelect ? 'button' : undefined}
+              tabIndex={onRowSelect ? 0 : undefined}
               onClick={() => onRowSelect?.(row.original)}
+              onKeyDown={(event) => {
+                if (!onRowSelect) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onRowSelect(row.original);
+                }
+              }}
             >
               {row.getVisibleCells().map((cell) => (
                 <td key={cell.id}>{String(cell.getValue() ?? '-')}</td>

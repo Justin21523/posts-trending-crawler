@@ -359,3 +359,17 @@ def test_api_compliance_excel_and_metadata_payloads(tmp_path, monkeypatch):
     assert drilldown.json()["available_fields"]
     assert drilldown.json()["related_posts"]
     assert drilldown.json()["related_jobs"]
+
+
+def test_api_allows_vite_fallback_dev_ports():
+    client = TestClient(create_app())
+    response = client.options(
+        "/health",
+        headers={
+            "Origin": "http://127.0.0.1:5176",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5176"

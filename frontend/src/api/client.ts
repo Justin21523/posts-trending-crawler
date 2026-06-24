@@ -32,10 +32,59 @@ import type {
   WorkflowSummary,
 } from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
+const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8000';
+const API_BASE_CANDIDATES = [
+  import.meta.env.VITE_API_BASE_URL,
+  DEFAULT_API_BASE_URL,
+  'http://127.0.0.1:8001',
+  'http://localhost:8000',
+  'http://localhost:8001',
+].filter(Boolean) as string[];
+
+let activeApiBaseUrl: string | null = null;
+let apiBaseUrlPromise: Promise<string> | null = null;
+
+function isCrawlerHealth(payload: unknown): payload is HealthResponse {
+  return (
+    typeof payload === 'object' &&
+    payload !== null &&
+    'database_ready' in payload &&
+    typeof (payload as HealthResponse).database_ready === 'boolean'
+  );
+}
+
+async function resolveApiBaseUrl(): Promise<string> {
+  if (activeApiBaseUrl) return activeApiBaseUrl;
+  if (apiBaseUrlPromise) return apiBaseUrlPromise;
+  apiBaseUrlPromise = (async () => {
+    const errors: string[] = [];
+    for (const baseUrl of Array.from(new Set(API_BASE_CANDIDATES))) {
+      try {
+        const response = await fetch(`${baseUrl}/health`);
+        if (!response.ok) {
+          errors.push(`${baseUrl}: HTTP ${response.status}`);
+          continue;
+        }
+        const payload = await response.json();
+        if (!isCrawlerHealth(payload)) {
+          errors.push(`${baseUrl}: API mismatch`);
+          continue;
+        }
+        activeApiBaseUrl = baseUrl;
+        return baseUrl;
+      } catch (error) {
+        errors.push(`${baseUrl}: ${(error as Error).message}`);
+      }
+    }
+    apiBaseUrlPromise = null;
+    throw new Error(`無法連線到 Taiwan Crawler API。${errors.join(' | ')}`);
+  })();
+  return apiBaseUrlPromise;
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const apiBaseUrl = await resolveApiBaseUrl();
+  const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: {
       'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
@@ -70,6 +119,9 @@ function queryString(params: Record<string, string | number | boolean | undefine
 }
 
 export const api = {
+  runtime: {
+    baseUrl: () => activeApiBaseUrl ?? import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL,
+  },
   health: () => request<HealthResponse>('/health'),
   summary: () => request<DashboardSummary>('/summary'),
   sources: () => request<SourceResponse[]>('/sources'),
@@ -126,7 +178,7 @@ export const api = {
         `/reports/excel${queryString({ output: payload.output ?? 'data/exports/analysis_report.xlsx' })}`,
         { method: 'POST' },
       ),
-    downloadUrl: (path: string) => `${API_BASE_URL}/reports/download${queryString({ path })}`,
+    downloadUrl: (path: string) => `${api.runtime.baseUrl()}/reports/download${queryString({ path })}`,
   },
   demo: {
     runWorkflow: (payload: { rows?: number; reset_demo?: boolean } = {}) =>
