@@ -1,6 +1,7 @@
 """Factories for assembling application services."""
 
 from dcard_crawler.clients.api_client import DcardAPIClient
+from dcard_crawler.connectors.news import NewsConnector
 from dcard_crawler.connectors.ptt import PttConnector
 from dcard_crawler.connectors.registry import ConnectorRegistry, default_registry
 from dcard_crawler.parsers.post_parser import PostParser
@@ -42,6 +43,21 @@ def build_ptt_ingest_service(
         default_board=board,
         allow_over18_public_confirm=allow_over18_public_confirm,
     )
+    return ConnectorIngestService(
+        connector=connector,
+        repository=PostRepository(),
+        quality_service=QualityService(),
+        source_repository=SourceRepository(),
+        crawl_job_repository=CrawlJobRepository(),
+    )
+
+
+def build_news_ingest_service(
+    *,
+    source_name: str,
+) -> ConnectorIngestService:
+    """Build News ingest service."""
+    connector = NewsConnector(source_name=source_name)
     return ConnectorIngestService(
         connector=connector,
         repository=PostRepository(),

@@ -15,7 +15,11 @@ from dcard_crawler.core.http_client import CrawlerHttpClient
 from dcard_crawler.core.rate_limiter import DomainRateLimiter
 from dcard_crawler.database import init_db, is_current_schema
 from dcard_crawler.services.checkpoint_service import CheckpointService
-from dcard_crawler.services.factory import build_ingest_service, build_ptt_ingest_service
+from dcard_crawler.services.factory import (
+    build_ingest_service,
+    build_news_ingest_service,
+    build_ptt_ingest_service,
+)
 from dcard_crawler.settings import settings
 
 app = typer.Typer(
@@ -519,6 +523,90 @@ def crawl_ptt(
             await service.close()
 
     asyncio.run(_run())
+
+
+def _run_news_crawl(
+    *,
+    source_name: str,
+    url: str,
+    target_type: str,
+    max_articles: int,
+) -> None:
+    if not _require_current_schema():
+        raise typer.Exit(1)
+
+    typer.echo(f"Starting news crawl: source={source_name} type={target_type} url={url}")
+
+    async def _run():
+        service = build_news_ingest_service(source_name=source_name)
+        try:
+            target = ConnectorTarget(
+                url=url,
+                label=source_name,
+                metadata={"target_type": target_type},
+            )
+            stats = await service.crawl_target(
+                target,
+                max_pages=1,
+                max_posts=max_articles,
+                max_articles=max_articles,
+                fetch_details=True,
+                source_base_url=url,
+            )
+            typer.echo("\n✓ News crawl completed!")
+            typer.echo(f"  Items listed: {stats['items_listed']}")
+            typer.echo(f"  Items detailed: {stats['items_detailed']}")
+            typer.echo(f"  Items stored: {stats['items_stored']}")
+            typer.echo(f"  Items skipped: {stats['items_skipped']}")
+            typer.echo(f"  Errors: {stats['errors']}")
+        finally:
+            await service.close()
+
+    asyncio.run(_run())
+
+
+@app.command()
+def crawl_news_rss(
+    source_name: str = typer.Option(..., "--source-name", help="News source name"),
+    feed_url: str = typer.Option(..., "--feed-url", help="RSS or Atom feed URL"),
+    max_articles: int = typer.Option(20, "--max-articles", help="Maximum articles to crawl"),
+):
+    """Crawl news articles from an RSS or Atom feed."""
+    _run_news_crawl(
+        source_name=source_name,
+        url=feed_url,
+        target_type="rss",
+        max_articles=max_articles,
+    )
+
+
+@app.command()
+def crawl_news_sitemap(
+    source_name: str = typer.Option(..., "--source-name", help="News source name"),
+    sitemap_url: str = typer.Option(..., "--sitemap-url", help="Sitemap XML URL"),
+    max_articles: int = typer.Option(20, "--max-articles", help="Maximum article URLs to crawl"),
+):
+    """Crawl news articles from a sitemap URL list."""
+    _run_news_crawl(
+        source_name=source_name,
+        url=sitemap_url,
+        target_type="sitemap",
+        max_articles=max_articles,
+    )
+
+
+@app.command()
+def crawl_news_article(
+    source_name: str = typer.Option(..., "--source-name", help="News source name"),
+    url: str = typer.Option(..., "--url", help="Public article URL"),
+):
+    """Crawl one public news article URL."""
+    _run_news_crawl(
+        source_name=source_name,
+        url=url,
+        target_type="article",
+        max_articles=1,
+    )
 
 
 @app.command()

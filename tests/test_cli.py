@@ -54,6 +54,10 @@ class FakePttIngestService(FakeIngestService):
     connector = FakePttConnector()
 
 
+class FakeNewsIngestService(FakeIngestService):
+    connector = None
+
+
 def test_init_reset_creates_current_schema(tmp_path, monkeypatch):
     """CLI init --reset should create the current multi-platform schema."""
     monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
@@ -156,6 +160,64 @@ def test_crawl_ptt_uses_service_factory_without_live_network(tmp_path, monkeypat
     assert fake_service.calls[0]["target"].label == "Stock"
 
 
+def test_news_commands_use_service_factory_without_live_network(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
+    init_db(reset=True)
+    fake_service = FakeNewsIngestService()
+    fake_service.calls = []
+    monkeypatch.setattr(
+        "dcard_crawler.cli.build_news_ingest_service",
+        lambda **kwargs: fake_service,
+    )
+
+    runner = CliRunner()
+    rss_result = runner.invoke(
+        app,
+        [
+            "crawl-news-rss",
+            "--source-name",
+            "demo",
+            "--feed-url",
+            "https://news.example.com/rss.xml",
+        ],
+    )
+    sitemap_result = runner.invoke(
+        app,
+        [
+            "crawl-news-sitemap",
+            "--source-name",
+            "demo",
+            "--sitemap-url",
+            "https://news.example.com/sitemap.xml",
+        ],
+    )
+    article_result = runner.invoke(
+        app,
+        [
+            "crawl-news-article",
+            "--source-name",
+            "demo",
+            "--url",
+            "https://news.example.com/a",
+        ],
+    )
+
+    assert rss_result.exit_code == 0
+    assert sitemap_result.exit_code == 0
+    assert article_result.exit_code == 0
+    assert fake_service.calls[0]["target"].metadata["target_type"] == "rss"
+    assert fake_service.calls[1]["target"].metadata["target_type"] == "sitemap"
+    assert fake_service.calls[2]["target"].metadata["target_type"] == "article"
+
+
+def test_news_help_commands_run():
+    runner = CliRunner()
+
+    assert runner.invoke(app, ["crawl-news-rss", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["crawl-news-sitemap", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["crawl-news-article", "--help"]).exit_code == 0
+
+
 def test_status_shows_recent_crawl_jobs(tmp_path, monkeypatch):
     monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
     init_db(reset=True)
@@ -219,3 +281,40 @@ def test_export_outputs_consistent_jsonl_and_csv_fields(tmp_path, monkeypatch):
     expected_fields = {"board_or_forum", "published_at", "crawled_at", "content_hash"}
     assert expected_fields.issubset(json_record)
     assert expected_fields.issubset(csv_record)
+
+
+def test_export_outputs_news_row(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
+    init_db(reset=True)
+    source_id = SourceRepository().get_or_create("demo-news", source_type="news")
+    PostRepository().upsert(
+        NormalizedPost(
+            source_id=source_id,
+            source_name="demo-news",
+            source_type="news",
+            platform="news",
+            external_id="hash-id",
+            title="News title",
+            board_or_forum="社會",
+            excerpt="News summary",
+            content="News content long enough",
+            published_at="2024-01-01T12:00:00Z",
+            created_at="2024-01-01T12:00:00Z",
+            url="https://news.example.com/a",
+            canonical_url="https://news.example.com/a",
+            content_hash="news-hash",
+            raw_json={"url": "https://news.example.com/a"},
+        )
+    )
+
+    output_path = tmp_path / "news.jsonl"
+    result = CliRunner().invoke(
+        app,
+        ["export", "--format", "jsonl", "--output", str(output_path)],
+    )
+
+    assert result.exit_code == 0
+    record = json.loads(output_path.read_text().splitlines()[0])
+    assert record["platform"] == "news"
+    assert record["source"] == "demo-news"
+    assert record["board_or_forum"] == "社會"
