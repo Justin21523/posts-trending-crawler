@@ -46,9 +46,12 @@ class DcardConnector(BaseConnector):
         before: int | None = None,
         limit: int | None = None,
         popular: bool = False,
+        mode: str | None = None,
     ) -> list[ConnectorItem]:
         """Fetch Dcard listing items."""
         forum_alias = target.label
+        if mode:
+            popular = mode == "popular"
         params = {
             "popular": str(popular).lower(),
             "limit": limit or settings.crawler.batch_size,

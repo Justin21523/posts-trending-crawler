@@ -93,6 +93,28 @@ async def test_dcard_connector_fetch_listing_uses_http_client():
 
 
 @pytest.mark.asyncio
+async def test_dcard_connector_fetch_listing_mode_sets_popular_param():
+    seen_params = []
+
+    class FakeHttpClient:
+        async def get_json(self, url, **kwargs):
+            seen_params.append(kwargs["params"])
+            return []
+
+        async def close(self):
+            return None
+
+    connector = DcardConnector(http_client=FakeHttpClient())
+    target = ConnectorTarget(url="https://www.dcard.tw/f/trending", label="trending")
+
+    await connector.fetch_listing(target, mode="latest")
+    await connector.fetch_listing(target, mode="popular")
+
+    assert seen_params[0]["popular"] == "false"
+    assert seen_params[1]["popular"] == "true"
+
+
+@pytest.mark.asyncio
 async def test_dcard_connector_fetch_detail_normalizes_without_live_network():
     class FakeHttpClient:
         request_count = 1
@@ -123,6 +145,10 @@ async def test_dcard_connector_fetch_detail_normalizes_without_live_network():
     post = connector.normalize_item(item)
     assert post.content == "Detail content"
     assert post.board_or_forum == "trending"
+    assert post.source_name == "dcard"
+    assert post.platform == "dcard"
+    assert post.external_id == "12345"
+    assert post.content_hash
 
 
 @pytest.mark.asyncio
