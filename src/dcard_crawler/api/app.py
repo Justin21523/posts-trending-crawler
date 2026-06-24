@@ -1,9 +1,11 @@
 """FastAPI app factory for crawler portfolio UI."""
 
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 
 from dcard_crawler.api.schemas import (
     CrawlJobResponse,
+    DashboardSummary,
     DiagnosticsDcardRequest,
     DiagnosticsResponse,
     HealthResponse,
@@ -27,6 +29,13 @@ def create_app(
         title="Taiwan Public Forum & News Crawler API",
         version="0.1.0",
     )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     queries = query_service or APIQueryService()
     controls = control_service or APIControlService()
 
@@ -37,6 +46,20 @@ def create_app(
     @app.get("/sources", response_model=list[SourceResponse])
     def sources():
         return queries.list_sources()
+
+    @app.get("/summary", response_model=DashboardSummary)
+    def summary():
+        recent_jobs = [
+            _crawl_job_response(job, source_name)
+            for job, source_name in queries.list_crawl_jobs(limit=5)
+        ]
+        return {
+            "counts": queries.counts(),
+            "recent_jobs": recent_jobs,
+            "recent_reports": queries.list_reports()[:5],
+            "platforms": queries.platform_counts(),
+            "health": queries.health(),
+        }
 
     @app.get("/posts", response_model=list[PostResponse])
     def posts(

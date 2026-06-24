@@ -70,6 +70,14 @@ class ReportSummary(BaseModel):
     status: str | None = None
 
 
+class DashboardSummary(BaseModel):
+    counts: dict[str, int]
+    recent_jobs: list[CrawlJobResponse]
+    recent_reports: list[ReportSummary]
+    platforms: dict[str, int]
+    health: HealthResponse
+
+
 class VerifyDcardRequest(BaseModel):
     forum: str = "trending"
     mode: str = Field(default="latest", pattern="^(latest|popular)$")

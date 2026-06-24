@@ -53,6 +53,11 @@ dcard-crawler verify-live-dcard --forum trending --max-posts 5
 
 # 8. Serve the backend API for the React portfolio UI
 dcard-crawler serve-api --host 127.0.0.1 --port 8000
+
+# 9. Serve the React portfolio UI
+cd frontend
+npm install
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
 ## CLI Commands
@@ -207,6 +212,25 @@ Useful endpoints:
 - `POST /verify/ptt`
 - `POST /verify/news-rss`
 - `POST /diagnostics/dcard`
+
+## React Portfolio UI
+
+The React dashboard lives in `frontend/` and connects to the FastAPI backend.
+
+```bash
+# Terminal 1
+conda activate data_env
+dcard-crawler serve-api --host 127.0.0.1 --port 8000
+
+# Terminal 2
+conda activate data_env
+cd frontend
+npm install
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+The UI opens at `http://127.0.0.1:5173` and reads API data from
+`http://127.0.0.1:8000` by default. Override with `VITE_API_BASE_URL` if needed.
 
 ## Architecture
 

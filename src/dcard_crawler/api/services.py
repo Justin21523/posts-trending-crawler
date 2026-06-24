@@ -126,6 +126,14 @@ class APIQueryService:
                 "crawl_jobs": int(session.execute(select(func.count(CrawlJob.id))).scalar() or 0),
             }
 
+    def platform_counts(self) -> dict[str, int]:
+        """Return post counts grouped by platform."""
+        with get_session() as session:
+            rows = session.execute(
+                select(Post.platform, func.count(Post.id)).group_by(Post.platform)
+            ).all()
+            return {platform: int(count) for platform, count in rows}
+
 
 class APIControlService:
     """Run crawler verification and diagnostics for API endpoints."""

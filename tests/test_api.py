@@ -87,12 +87,23 @@ def test_api_health_sources_posts_and_jobs(tmp_path, monkeypatch):
     sources = client.get("/sources")
     posts = client.get("/posts", params={"platform": "ptt", "keyword": "AI"})
     jobs = client.get("/crawl-jobs", params={"source": "ptt"})
+    summary = client.get("/summary")
+    cors = client.options(
+        "/health",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
 
     assert health.status_code == 200
     assert health.json()["database_ready"] is True
     assert sources.json()[0]["name"] == "ptt"
     assert posts.json()[0]["title"] == "AI Stock title"
     assert jobs.json()[0]["status"] == "completed"
+    assert summary.json()["counts"]["posts"] == 1
+    assert summary.json()["platforms"]["ptt"] == 1
+    assert cors.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
 def test_api_reports_reads_json_summaries(tmp_path, monkeypatch):

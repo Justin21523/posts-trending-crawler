@@ -9,6 +9,11 @@ __pycache__/
 htmlcov/
 build/
 dist/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
+frontend/node_modules/.tmp/
 
 # Local environments and editor files
 .env
