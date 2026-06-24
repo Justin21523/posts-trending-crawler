@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy import delete, select
 
+from dcard_crawler.analysis.topic_taxonomy import TOPIC_TAXONOMY, TopicDefinition
 from dcard_crawler.core.text_utils import content_hash
 from dcard_crawler.database import get_session, init_db
 from dcard_crawler.models import CrawlJob, Post, Source
@@ -19,18 +20,7 @@ from dcard_crawler.repositories.post_repository import PostRepository
 from dcard_crawler.repositories.source_repository import SourceRepository
 from dcard_crawler.schemas import NormalizedPost
 
-DEMO_KEYWORDS = [
-    "AI",
-    "台積電",
-    "工作",
-    "面試",
-    "Python",
-    "資料分析",
-    "生成式AI",
-    "半導體",
-    "薪資",
-    "遠端工作",
-]
+DEMO_KEYWORDS = [keyword.keyword for topic in TOPIC_TAXONOMY for keyword in topic.keywords]
 
 
 @dataclass(frozen=True)
@@ -146,7 +136,17 @@ class DemoSeedService:
         return source_ids
 
     def _build_post(self, *, index: int, spec: DemoSourceSpec, source_id: int) -> NormalizedPost:
-        keyword = self.random.choice(DEMO_KEYWORDS)
+        primary_topic = self.random.choice(TOPIC_TAXONOMY)
+        secondary_topic = self.random.choice(
+            [topic for topic in TOPIC_TAXONOMY if topic.topic_id != primary_topic.topic_id]
+        )
+        primary_keywords = self.random.sample(
+            list(primary_topic.keywords),
+            k=min(3, len(primary_topic.keywords)),
+        )
+        secondary_keyword = self.random.choice(secondary_topic.keywords)
+        keywords = [item.keyword for item in primary_keywords] + [secondary_keyword.keyword]
+        keyword = keywords[0]
         board = self.random.choice(spec.boards)
         days_ago = self.random.randint(0, 44)
         minutes = self.random.randint(0, 24 * 60)
@@ -155,17 +155,23 @@ class DemoSeedService:
         )
         external_id = f"demo-{spec.platform}-{index:05d}"
         quality_case = "ok"
-        content = (
-            f"{keyword} 在 {board} 的討論持續升溫。這筆資料用來展示公開論壇與新聞資料"
-            f"如何被 normalize、去重、分析並輸出 Excel 報表。"
+        content = self._topic_content(
+            primary_topic=primary_topic,
+            secondary_topic=secondary_topic,
+            keywords=keywords,
+            board=board,
+            platform=spec.platform,
         )
         if index % 37 == 0:
             content = ""
             quality_case = "missing_content"
 
-        title = f"{keyword} 趨勢觀察：{board} 公開討論樣本 {index + 1}"
+        title = (
+            f"{primary_topic.topic_name} 趨勢觀察："
+            f"{keyword} 與 {secondary_keyword.keyword} 樣本 {index + 1}"
+        )
         if index % 113 == 0:
-            title = f"{keyword} 快訊"
+            title = f"{keyword} 快訊：{primary_topic.topic_name} 討論升溫"
 
         base_url = spec.base_url.rstrip("/")
         url = f"{base_url}/demo/{board}/{external_id}"
@@ -174,10 +180,30 @@ class DemoSeedService:
         view_count = self._metric_value(spec.platform, "view")
         raw_json = {
             "demo": True,
-            "keyword": keyword,
+            "primary_topic": primary_topic.topic_id,
+            "secondary_topic": secondary_topic.topic_id,
+            "keywords": keywords,
             "quality_case": quality_case,
             "portfolio_notice": "Generated sample data for UI and analytics preview.",
         }
+        topics = [
+            {
+                "topic_id": primary_topic.topic_id,
+                "name": primary_topic.topic_name,
+                "name_en": primary_topic.topic_name_en,
+                "color": primary_topic.color,
+                "keywords": keywords[:3],
+                "role": "primary",
+            },
+            {
+                "topic_id": secondary_topic.topic_id,
+                "name": secondary_topic.topic_name,
+                "name_en": secondary_topic.topic_name_en,
+                "color": secondary_topic.color,
+                "keywords": [secondary_keyword.keyword],
+                "role": "secondary",
+            },
+        ]
         return NormalizedPost(
             source_id=source_id,
             source_name=spec.name,
@@ -198,12 +224,38 @@ class DemoSeedService:
             comment_count=comment_count,
             share_count=self.random.randint(0, 80) if spec.platform == "news" else 0,
             view_count=view_count,
+            topics=topics,
             url=url,
             canonical_url=url,
             crawl_source="demo",
             raw_json=raw_json,
             content_hash=content_hash(title, content, url),
             language="zh-TW",
+        )
+
+    def _topic_content(
+        self,
+        *,
+        primary_topic: TopicDefinition,
+        secondary_topic: TopicDefinition,
+        keywords: list[str],
+        board: str,
+        platform: str,
+    ) -> str:
+        """Build richer sample text with multiple taxonomy keywords."""
+        focus = "、".join(keywords[:3])
+        related = keywords[-1]
+        angles = [
+            "討論集中在資料來源治理、趨勢變化與可驗證的分析證據",
+            "使用者關注風險、成本、實務經驗與後續影響",
+            "跨平台聲量顯示不同社群對同一議題有不同互動模式",
+            "留言與文章標題反映短期熱度、長期職涯和產業判斷",
+        ]
+        return (
+            f"{primary_topic.topic_name} 在 {platform} / {board} 的討論持續升溫，"
+            f"核心關鍵字包含 {focus}，並與 {secondary_topic.topic_name} 的 {related} 形成共現。"
+            f"{self.random.choice(angles)}。這筆資料用來展示公開論壇與新聞資料如何被 "
+            "normalize、去重、進行 topic mining、產生視覺化分析並輸出 Excel 報表。"
         )
 
     def _metric_value(self, platform: str, metric: str) -> int:

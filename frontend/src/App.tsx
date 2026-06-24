@@ -92,6 +92,7 @@ import type {
   SourceResponse,
   StoryGraph,
   TimeSeriesAnalytics,
+  TopicAnalytics,
   TrendAnalytics,
   VerifyResponse,
   WorkflowSummary,
@@ -347,6 +348,7 @@ export function App() {
   const [keywordNetwork, setKeywordNetwork] = useState<KeywordNetworkAnalytics | null>(null);
   const [keywordInsights, setKeywordInsights] = useState<KeywordInsightsAnalytics | null>(null);
   const [keywordHeatmap, setKeywordHeatmap] = useState<KeywordHeatmapAnalytics | null>(null);
+  const [topics, setTopics] = useState<TopicAnalytics | null>(null);
   const [sourceHealth, setSourceHealth] = useState<SourceHealthAnalytics | null>(null);
   const [lineage, setLineage] = useState<LineageAnalytics | null>(null);
   const [crawlFlow, setCrawlFlow] = useState<CrawlFlowAnalytics | null>(null);
@@ -400,6 +402,7 @@ export function App() {
       ['keywordNetwork', api.analytics.keywordNetwork()],
       ['keywordInsights', api.analytics.keywordInsights()],
       ['keywordHeatmap', api.analytics.keywordHeatmap()],
+      ['topics', api.analytics.topics()],
       ['sourceHealth', api.analytics.sourceHealth()],
       ['lineage', api.analytics.lineage()],
       ['crawlFlow', api.analytics.crawlFlow()],
@@ -437,18 +440,19 @@ export function App() {
       const nextKeywordNetwork = value<KeywordNetworkAnalytics>(8);
       const nextKeywordInsights = value<KeywordInsightsAnalytics>(9);
       const nextKeywordHeatmap = value<KeywordHeatmapAnalytics>(10);
-      const nextSourceHealth = value<SourceHealthAnalytics>(11);
-      const nextLineage = value<LineageAnalytics>(12);
-      const nextCrawlFlow = value<CrawlFlowAnalytics>(13);
-      const nextDataQualityTable = value<DataQualityTableAnalytics>(14);
-      const nextDemoStory = value<DemoStoryAnalytics>(15);
-      const nextComplianceSummary = value<ComplianceSummary>(16);
-      const nextTrends = value<TrendAnalytics>(17);
-      const nextKeywords = value<KeywordAnalytics>(18);
-      const nextEngagement = value<EngagementAnalytics>(19);
-      const nextPlatforms = value<PlatformAnalytics>(20);
-      const nextQuality = value<DataQualityAnalytics>(21);
-      const nextWorkflow = value<WorkflowSummary>(22);
+      const nextTopics = value<TopicAnalytics>(11);
+      const nextSourceHealth = value<SourceHealthAnalytics>(12);
+      const nextLineage = value<LineageAnalytics>(13);
+      const nextCrawlFlow = value<CrawlFlowAnalytics>(14);
+      const nextDataQualityTable = value<DataQualityTableAnalytics>(15);
+      const nextDemoStory = value<DemoStoryAnalytics>(16);
+      const nextComplianceSummary = value<ComplianceSummary>(17);
+      const nextTrends = value<TrendAnalytics>(18);
+      const nextKeywords = value<KeywordAnalytics>(19);
+      const nextEngagement = value<EngagementAnalytics>(20);
+      const nextPlatforms = value<PlatformAnalytics>(21);
+      const nextQuality = value<DataQualityAnalytics>(22);
+      const nextWorkflow = value<WorkflowSummary>(23);
       setSummary(nextSummary);
       setSources(nextSources ?? []);
       setSourceCatalog(nextSourceCatalog ?? []);
@@ -460,6 +464,7 @@ export function App() {
       setKeywordNetwork(nextKeywordNetwork);
       setKeywordInsights(nextKeywordInsights);
       setKeywordHeatmap(nextKeywordHeatmap);
+      setTopics(nextTopics);
       setSourceHealth(nextSourceHealth);
       setLineage(nextLineage);
       setCrawlFlow(nextCrawlFlow);
@@ -708,7 +713,14 @@ export function App() {
           </>
         );
       case 'demo':
-        return <DemoWalkthroughPage story={demoStory} onRunDemo={() => void runDemoWorkflow()} running={demoRunning} />;
+        return (
+          <DemoWalkthroughPage
+            story={demoStory}
+            onRunDemo={() => void runDemoWorkflow()}
+            running={demoRunning}
+            onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+          />
+        );
       case 'architecture':
         return (
           <ArchitectureMapPage
@@ -767,6 +779,7 @@ export function App() {
         return (
           <KeywordPage
             keywords={keywords}
+            topics={topics}
             network={keywordNetwork}
             insights={keywordInsights}
             heatmap={keywordHeatmap}
@@ -1253,10 +1266,12 @@ function DemoWalkthroughPage({
   story,
   onRunDemo,
   running,
+  onDrilldown,
 }: {
   story: DemoStoryAnalytics | null;
   onRunDemo: () => void;
   running: boolean;
+  onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
   const { t } = useTranslation();
   const [selectedStep, setSelectedStep] = useState<DemoStoryStep | null>(null);
@@ -1273,6 +1288,40 @@ function DemoWalkthroughPage({
           <PlayCircle size={18} />
           {running ? t('demo.generating') : t('demo.runWorkflow')}
         </button>
+      </div>
+
+      <div className="demo-proof-grid">
+        {(story?.proof_cards ?? []).map((card) => (
+          <button
+            className="proof-card"
+            type="button"
+            key={card.title}
+            onClick={() => onDrilldown(card.drilldown_kind, card.drilldown_id, {
+              title: card.title,
+              summary: { value: card.value },
+              metadata: card as unknown as Record<string, unknown>,
+            })}
+          >
+            <span>{card.value}</span>
+            <strong>{card.title}</strong>
+            <small>{card.caption}</small>
+          </button>
+        ))}
+      </div>
+
+      <div className="panel wide-panel demo-path-panel">
+        <div className="panel-header">
+          <h2>Recommended demo path</h2>
+          <span className="pill">{story?.evidence_metrics?.keywords ?? 0} taxonomy keywords</span>
+        </div>
+        <div className="demo-path">
+          {(story?.recommended_demo_path ?? []).map((item, index) => (
+            <div className="demo-path-step" key={item}>
+              <span>{index + 1}</span>
+              <strong>{item}</strong>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="walkthrough-track">
@@ -1797,6 +1846,7 @@ function TrendPage({
 
 function KeywordPage({
   keywords,
+  topics,
   network,
   insights,
   heatmap,
@@ -1804,6 +1854,7 @@ function KeywordPage({
   t,
 }: {
   keywords: KeywordAnalytics | null;
+  topics: TopicAnalytics | null;
   network: KeywordNetworkAnalytics | null;
   insights: KeywordInsightsAnalytics | null;
   heatmap: KeywordHeatmapAnalytics | null;
@@ -1822,6 +1873,33 @@ function KeywordPage({
 
   return (
     <section className="page-grid analytics-grid">
+      <div className="panel wide-panel topic-overview-panel">
+        <div className="panel-header">
+          <h2>Topic Overview</h2>
+          <span className="pill">
+            {topics?.taxonomy_size.topics ?? 0} topics / {topics?.taxonomy_size.keywords ?? 0} keywords
+          </span>
+        </div>
+        <div className="topic-card-grid">
+          {(topics?.topics ?? []).map((topic) => (
+            <button
+              className="topic-card"
+              type="button"
+              key={topic.topic_id}
+              onClick={() => onDrilldown('topic', topic.topic_id, {
+                title: topic.topic_name,
+                metadata: topic as unknown as Record<string, unknown>,
+              })}
+              style={{ borderColor: topic.color }}
+            >
+              <span style={{ background: topic.color }} />
+              <strong>{topic.topic_name}</strong>
+              <small>{topic.count} posts</small>
+              <em>{topic.top_keywords.slice(0, 4).map((item) => item.keyword).join(' / ')}</em>
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="panel">
         <div className="panel-header"><h2>{t('keyword.frequency')}</h2></div>
         <ResponsiveContainer width="100%" height={300}>
@@ -1903,7 +1981,7 @@ function KeywordBubbleMap({
   const viewportRef = useRef<SVGGElement | null>(null);
   const zoomBehaviorRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
-  const nodes = (network?.nodes ?? []).slice(0, 18);
+  const nodes = (network?.nodes ?? []).slice(0, 30);
   const links = network?.links ?? [];
   const width = 900;
   const height = 480;

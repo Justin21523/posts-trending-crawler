@@ -179,6 +179,10 @@ def create_app(
     def analytics_keyword_heatmap():
         return queries.analytics_keyword_heatmap()
 
+    @app.get("/analytics/topics")
+    def analytics_topics():
+        return queries.analytics_topics()
+
     @app.get("/analytics/source-health")
     def analytics_source_health():
         return queries.analytics_source_health()

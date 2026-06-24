@@ -147,8 +147,34 @@ export type TrendAnalytics = {
 };
 
 export type KeywordAnalytics = {
-  keywords: Array<{ keyword: string; count: number }>;
+  keywords: Array<{
+    keyword: string;
+    count: number;
+    topic_id?: string;
+    topic_name?: string;
+    topic_name_en?: string;
+    group?: string;
+    color?: string;
+  }>;
   by_platform: Array<{ platform: string; keyword: string; count: number }>;
+  by_topic: Array<Record<string, unknown>>;
+};
+
+export type TopicAnalytics = {
+  topics: Array<{
+    topic_id: string;
+    topic_name: string;
+    topic_name_en: string;
+    color: string;
+    keywords: string[];
+    count: number;
+    top_keywords: Array<{ keyword: string; count: number }>;
+    platform_distribution: Array<{ platform: string; count: number }>;
+    board_distribution: Array<{ board_or_forum: string; count: number }>;
+    evidence_posts: Array<Record<string, unknown>>;
+  }>;
+  topic_trend: Array<{ date: string; topic_id: string; count: number }>;
+  taxonomy_size: { topics: number; keywords: number };
 };
 
 export type EngagementPost = {
@@ -224,6 +250,9 @@ export type KeywordNetworkAnalytics = {
     value: number;
     category?: string;
     group?: string;
+    topic_id?: string;
+    topic_name?: string;
+    topic_name_en?: string;
     color?: string;
     metadata?: Record<string, unknown>;
     samples?: Array<Record<string, unknown>>;
@@ -342,6 +371,15 @@ export type DemoStoryAnalytics = {
   demo_dataset_present: boolean;
   kpis: KPIOverview;
   demo_live_ratio: { demo: number; live: number; total: number };
+  evidence_metrics?: Record<string, number>;
+  proof_cards?: Array<{
+    title: string;
+    value: number;
+    caption: string;
+    drilldown_kind: string;
+    drilldown_id: string;
+  }>;
+  recommended_demo_path?: string[];
   walkthrough_steps: DemoStoryStep[];
   architecture: StoryGraph;
   lifecycle: StoryGraph;

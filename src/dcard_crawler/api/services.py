@@ -9,12 +9,16 @@ from typing import Any
 
 from sqlalchemy import desc, func, or_, select
 
+from dcard_crawler.analysis.topic_taxonomy import (
+    TOPIC_TAXONOMY,
+    all_topic_keywords,
+    classify_text,
+    topic_metadata,
+)
 from dcard_crawler.connectors.base import ConnectorTarget
-from dcard_crawler.core.text_utils import normalize_text
 from dcard_crawler.database import get_session, is_current_schema
 from dcard_crawler.models import CrawlJob, Post, Source
 from dcard_crawler.services.dcard_diagnostics import DcardEndpointDiagnosticsService
-from dcard_crawler.services.demo_seed import DEMO_KEYWORDS
 from dcard_crawler.services.factory import (
     build_ingest_service,
     build_news_ingest_service,
@@ -26,6 +30,10 @@ from dcard_crawler.services.source_catalog import load_source_catalog
 
 class APIQueryService:
     """Query SQLite data for API responses."""
+
+    def __init__(self) -> None:
+        self._taxonomy_cache_key: tuple[int, datetime | None] | None = None
+        self._taxonomy_cache_rows: list[dict[str, Any]] | None = None
 
     def health(self) -> dict[str, Any]:
         """Return backend health and schema status."""
@@ -355,27 +363,101 @@ class APIQueryService:
         """Return keyword frequency and platform distribution."""
         keyword_counts: Counter[str] = Counter()
         by_platform: dict[str, Counter[str]] = defaultdict(Counter)
-        with get_session() as session:
-            rows = session.execute(
-                select(Post.platform, Post.title, Post.excerpt, Post.content)
-            ).all()
-        for platform, title, excerpt, content in rows:
-            text = normalize_text(" ".join([title or "", excerpt or "", content or ""]))
-            for keyword in DEMO_KEYWORDS:
-                count = text.count(normalize_text(keyword))
-                if count:
-                    keyword_counts[keyword] += count
-                    by_platform[platform][keyword] += count
+        by_topic: dict[str, Counter[str]] = defaultdict(Counter)
+        for row in self._taxonomy_matched_posts():
+            platform = row["platform"]
+            for match in row["matches"]:
+                keyword = match["keyword"]
+                count = int(match["match_count"])
+                keyword_counts[keyword] += count
+                by_platform[platform][keyword] += count
+                by_topic[match["topic_id"]][keyword] += count
         return {
             "keywords": [
-                {"keyword": keyword, "count": count}
-                for keyword, count in keyword_counts.most_common(20)
+                {**self._keyword_category(keyword), "keyword": keyword, "count": count}
+                for keyword, count in keyword_counts.most_common(50)
             ],
             "by_platform": [
                 {"platform": platform, "keyword": keyword, "count": count}
                 for platform, counter in sorted(by_platform.items())
-                for keyword, count in counter.most_common(10)
+                for keyword, count in counter.most_common(20)
             ],
+            "by_topic": [
+                {
+                    **topic_metadata(topic_id),
+                    "keyword": keyword,
+                    "count": count,
+                }
+                for topic_id, counter in sorted(by_topic.items())
+                for keyword, count in counter.most_common(12)
+            ],
+        }
+
+    def analytics_topics(self) -> dict[str, Any]:
+        """Return topic-level summaries from the shared taxonomy."""
+        topic_counts: Counter[str] = Counter()
+        keyword_counts: dict[str, Counter[str]] = defaultdict(Counter)
+        platform_counts: dict[str, Counter[str]] = defaultdict(Counter)
+        board_counts: dict[str, Counter[str]] = defaultdict(Counter)
+        trend_counts: Counter[tuple[str, str]] = Counter()
+        evidence: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in self._taxonomy_matched_posts():
+            day = self._date_key(row["published_at"] or row["created_at"])
+            seen_topics: set[str] = set()
+            for match in row["matches"]:
+                topic_id = match["topic_id"]
+                keyword = match["keyword"]
+                count = int(match["match_count"])
+                keyword_counts[topic_id][keyword] += count
+                if topic_id in seen_topics:
+                    continue
+                seen_topics.add(topic_id)
+                topic_counts[topic_id] += 1
+                platform_counts[topic_id][row["platform"] or "unknown"] += 1
+                board_counts[topic_id][row["board_or_forum"] or "unknown"] += 1
+                if day:
+                    trend_counts[(day, topic_id)] += 1
+                if len(evidence[topic_id]) < 6:
+                    evidence[topic_id].append(
+                        {
+                            "post_id": row["id"],
+                            "platform": row["platform"],
+                            "board_or_forum": row["board_or_forum"],
+                            "title": row["title"],
+                        }
+                    )
+        topics = []
+        for topic in TOPIC_TAXONOMY:
+            meta = topic_metadata(topic.topic_id)
+            topics.append(
+                {
+                    **meta,
+                    "count": topic_counts[topic.topic_id],
+                    "top_keywords": [
+                        {"keyword": keyword, "count": count}
+                        for keyword, count in keyword_counts[topic.topic_id].most_common(8)
+                    ],
+                    "platform_distribution": [
+                        {"platform": name, "count": value}
+                        for name, value in platform_counts[topic.topic_id].most_common(8)
+                    ],
+                    "board_distribution": [
+                        {"board_or_forum": name, "count": value}
+                        for name, value in board_counts[topic.topic_id].most_common(8)
+                    ],
+                    "evidence_posts": evidence[topic.topic_id],
+                }
+            )
+        return {
+            "topics": sorted(topics, key=lambda item: item["count"], reverse=True),
+            "topic_trend": [
+                {"date": day, "topic_id": topic_id, "count": count}
+                for (day, topic_id), count in sorted(trend_counts.items())
+            ],
+            "taxonomy_size": {
+                "topics": len(TOPIC_TAXONOMY),
+                "keywords": len(all_topic_keywords()),
+            },
         }
 
     def analytics_engagement(self) -> dict[str, Any]:
@@ -560,20 +642,13 @@ class APIQueryService:
         platforms: dict[str, Counter[str]] = defaultdict(Counter)
         boards: dict[str, Counter[str]] = defaultdict(Counter)
         related_terms: dict[str, Counter[str]] = defaultdict(Counter)
-        with get_session() as session:
-            rows = session.execute(
-                select(
-                    Post.id,
-                    Post.platform,
-                    Post.board_or_forum,
-                    Post.title,
-                    Post.excerpt,
-                    Post.content,
-                )
-            ).all()
-        for post_id, platform, board, title, excerpt, content in rows:
-            text = normalize_text(" ".join([title or "", excerpt or "", content or ""]))
-            matched = sorted({kw for kw in DEMO_KEYWORDS if normalize_text(kw) in text})
+        for row in self._taxonomy_matched_posts():
+            post_id = row["id"]
+            platform = row["platform"]
+            board = row["board_or_forum"]
+            title = row["title"]
+            matched_rows = row["matches"]
+            matched = sorted({match["keyword"] for match in matched_rows})
             for keyword in matched:
                 keyword_counts[keyword] += 1
                 platforms[keyword][platform or "unknown"] += 1
@@ -722,23 +797,25 @@ class APIQueryService:
     def analytics_keyword_heatmap(self) -> dict[str, Any]:
         """Return platform by keyword matrix."""
         platforms = sorted(self.platform_counts())
-        keywords = DEMO_KEYWORDS
+        keywords = [row["keyword"] for row in all_topic_keywords()]
         matrix = {platform: dict.fromkeys(keywords, 0) for platform in platforms}
-        with get_session() as session:
-            rows = session.execute(
-                select(Post.platform, Post.title, Post.excerpt, Post.content)
-            ).all()
-        for platform, title, excerpt, content in rows:
-            text = normalize_text(" ".join([title or "", excerpt or "", content or ""]))
-            for keyword in keywords:
+        for row in self._taxonomy_matched_posts():
+            platform = row["platform"]
+            for match in row["matches"]:
+                keyword = match["keyword"]
                 matrix.setdefault(platform, dict.fromkeys(keywords, 0))
-                matrix[platform][keyword] += text.count(normalize_text(keyword))
+                matrix[platform][keyword] += int(match["match_count"])
         cells = [
             {"platform": platform, "keyword": keyword, "count": count}
             for platform, counts in matrix.items()
             for keyword, count in counts.items()
         ]
-        return {"platforms": platforms, "keywords": keywords, "cells": cells}
+        top_keywords = [item["keyword"] for item in self.analytics_keywords()["keywords"][:30]]
+        return {
+            "platforms": platforms,
+            "keywords": top_keywords,
+            "cells": [cell for cell in cells if cell["keyword"] in set(top_keywords)],
+        }
 
     def analytics_source_health(self) -> dict[str, Any]:
         """Return source health matrix rows."""
@@ -961,6 +1038,49 @@ class APIQueryService:
             "kpis": overview["kpis"],
             "demo_live_ratio": dashboard["demo_live_ratio"],
             "walkthrough_steps": steps,
+            "evidence_metrics": {
+                "topics": self.analytics_topics()["taxonomy_size"]["topics"],
+                "keywords": self.analytics_topics()["taxonomy_size"]["keywords"],
+                "keyword_nodes": len(self.analytics_keyword_network()["nodes"]),
+                "reports": len(self.list_reports()),
+            },
+            "proof_cards": [
+                {
+                    "title": "資料來源治理",
+                    "value": overview["kpis"]["total_sources"],
+                    "caption": "sources registered with policy and robot diagnostics",
+                    "drilldown_kind": "kpi",
+                    "drilldown_id": "sources",
+                },
+                {
+                    "title": "可分析文章",
+                    "value": overview["kpis"]["total_posts"],
+                    "caption": "normalized posts/articles across forum and news sources",
+                    "drilldown_kind": "kpi",
+                    "drilldown_id": "posts",
+                },
+                {
+                    "title": "Topic Taxonomy",
+                    "value": self.analytics_topics()["taxonomy_size"]["topics"],
+                    "caption": "topic groups used for keyword mining and evidence retrieval",
+                    "drilldown_kind": "topic",
+                    "drilldown_id": self.analytics_topics()["topics"][0]["topic_id"],
+                },
+                {
+                    "title": "Keyword Dictionary",
+                    "value": self.analytics_topics()["taxonomy_size"]["keywords"],
+                    "caption": "keywords and aliases matched from title, excerpt, and content",
+                    "drilldown_kind": "keyword",
+                    "drilldown_id": self.analytics_keywords()["keywords"][0]["keyword"],
+                },
+            ],
+            "recommended_demo_path": [
+                "Open Demo Walkthrough",
+                "Inspect Topic Mining",
+                "Click a topic or keyword",
+                "Open related post detail",
+                "Export Excel report",
+            ],
             "architecture": self._architecture_graph(),
             "lifecycle": self._lifecycle_graph(),
             "interview_highlights": [
@@ -1149,6 +1269,8 @@ class APIQueryService:
                 }
         if kind == "keyword":
             return self._keyword_drilldown(item_id)
+        if kind == "topic":
+            return self._topic_drilldown(item_id)
         if kind == "platform":
             return self._platform_drilldown(item_id)
         if kind == "workflow_node":
@@ -1903,6 +2025,32 @@ class APIQueryService:
             "raw_payload": self.analytics_keyword_network(),
         }
 
+    def _topic_drilldown(self, topic_id: str) -> dict[str, Any]:
+        topics = self.analytics_topics()
+        topic = next(
+            (item for item in topics["topics"] if item["topic_id"] == topic_id),
+            topic_metadata(topic_id),
+        )
+        keywords = [item["keyword"] for item in topic.get("top_keywords", [])]
+        rows = []
+        for keyword in keywords[:4]:
+            rows.extend(self.search_posts(keyword=keyword, limit=4)["rows"])
+        unique_rows = {row["id"]: row for row in rows}.values()
+        return {
+            "kind": "topic",
+            "id": topic_id,
+            "title": topic.get("topic_name", topic_id),
+            "subtitle": "Topic drilldown",
+            "summary": {
+                "post_count": topic.get("count", 0),
+                "keyword_count": len(topic.get("keywords", [])),
+            },
+            "metadata": topic,
+            "related_posts": list(unique_rows)[:12],
+            "related_jobs": self.analytics_overview()["latest_jobs"],
+            "raw_payload": topics,
+        }
+
     def _platform_drilldown(self, platform: str) -> dict[str, Any]:
         rows = self.search_posts(platform=platform, limit=12)["rows"]
         stats = next(
@@ -1992,21 +2140,16 @@ class APIQueryService:
 
     @staticmethod
     def _keyword_category(keyword: str) -> dict[str, str]:
-        tech = {"AI", "生成式AI", "Python", "半導體"}
-        finance = {"台積電"}
-        career = {"工作", "面試", "薪資"}
-        analysis = {"資料分析"}
-        work_style = {"遠端工作"}
-        if keyword in tech:
-            return {"category": "tech-ai", "group": "AI / Tech", "color": "#2563eb"}
-        if keyword in finance:
-            return {"category": "finance", "group": "Finance", "color": "#0f766e"}
-        if keyword in career:
-            return {"category": "career", "group": "Career", "color": "#f59e0b"}
-        if keyword in analysis:
-            return {"category": "data-analysis", "group": "Data Analysis", "color": "#7c3aed"}
-        if keyword in work_style:
-            return {"category": "work-style", "group": "Work Style", "color": "#0891b2"}
+        for row in all_topic_keywords():
+            if row["keyword"] == keyword:
+                return {
+                    "category": row["topic_id"],
+                    "group": row["topic_name"],
+                    "topic_id": row["topic_id"],
+                    "topic_name": row["topic_name"],
+                    "topic_name_en": row["topic_name_en"],
+                    "color": row["color"],
+                }
         return {"category": "topic", "group": "Topic", "color": "#64748b"}
 
     @staticmethod
@@ -2049,16 +2192,51 @@ class APIQueryService:
 
     def _keyword_counts(self, session, *, limit: int) -> list[dict[str, Any]]:
         counter: Counter[str] = Counter()
-        rows = session.execute(select(Post.title, Post.excerpt, Post.content)).all()
-        for title, excerpt, content in rows:
-            text = normalize_text(" ".join([title or "", excerpt or "", content or ""]))
-            for keyword in DEMO_KEYWORDS:
-                count = text.count(normalize_text(keyword))
-                if count:
-                    counter[keyword] += count
+        for row in self._taxonomy_matched_posts():
+            for match in row["matches"]:
+                counter[match["keyword"]] += int(match["match_count"])
         return [
-            {"keyword": keyword, "count": count} for keyword, count in counter.most_common(limit)
+            {**self._keyword_category(keyword), "keyword": keyword, "count": count}
+            for keyword, count in counter.most_common(limit)
         ]
+
+    def _taxonomy_matched_posts(self) -> list[dict[str, Any]]:
+        with get_session() as session:
+            cache_key = session.execute(
+                select(func.count(Post.id), func.max(Post.crawled_at))
+            ).one()
+            key = (int(cache_key[0] or 0), cache_key[1])
+            if self._taxonomy_cache_key == key and self._taxonomy_cache_rows is not None:
+                return self._taxonomy_cache_rows
+            rows = session.execute(
+                select(
+                    Post.id,
+                    Post.platform,
+                    Post.board_or_forum,
+                    Post.title,
+                    Post.excerpt,
+                    Post.content,
+                    Post.published_at,
+                    Post.created_at,
+                )
+            ).all()
+        matched = []
+        for post_id, platform, board, title, excerpt, content, published_at, created_at in rows:
+            text = " ".join([title or "", excerpt or "", content or ""])
+            matched.append(
+                {
+                    "id": post_id,
+                    "platform": platform,
+                    "board_or_forum": board,
+                    "title": title,
+                    "published_at": published_at,
+                    "created_at": created_at,
+                    "matches": classify_text(text),
+                }
+            )
+        self._taxonomy_cache_key = key
+        self._taxonomy_cache_rows = matched
+        return matched
 
     def _top_posts(self, session, *, limit: int) -> list[dict[str, Any]]:
         rows = session.execute(

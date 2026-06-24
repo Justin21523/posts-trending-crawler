@@ -207,6 +207,7 @@ def test_api_analytics_endpoints_after_demo_seed(tmp_path, monkeypatch):
     overview = client.get("/analytics/overview")
     trends = client.get("/analytics/trends")
     keywords = client.get("/analytics/keywords")
+    topics = client.get("/analytics/topics")
     engagement = client.get("/analytics/engagement")
     platforms = client.get("/analytics/platforms")
     quality = client.get("/analytics/data-quality")
@@ -217,6 +218,10 @@ def test_api_analytics_endpoints_after_demo_seed(tmp_path, monkeypatch):
     assert overview.json()["kpis"]["total_posts"] == 120
     assert trends.json()["daily_post_count"]
     assert keywords.json()["keywords"]
+    assert len(keywords.json()["keywords"]) > 10
+    assert topics.json()["taxonomy_size"]["topics"] >= 8
+    assert topics.json()["taxonomy_size"]["keywords"] >= 70
+    assert topics.json()["topics"][0]["top_keywords"]
     assert engagement.json()["top_posts"]
     assert platforms.json()["platforms"]
     assert quality.json()["demo_records"] == 120
@@ -235,6 +240,7 @@ def test_api_visualization_endpoints_after_demo_seed(tmp_path, monkeypatch):
     network = client.get("/analytics/keyword-network")
     keyword_insights = client.get("/analytics/keyword-insights")
     heatmap = client.get("/analytics/keyword-heatmap")
+    topics = client.get("/analytics/topics")
     source_health = client.get("/analytics/source-health")
     lineage = client.get("/analytics/lineage")
     crawl_flow = client.get("/analytics/crawl-flow")
@@ -246,8 +252,11 @@ def test_api_visualization_endpoints_after_demo_seed(tmp_path, monkeypatch):
     assert time_series.json()["daily_by_platform"]
     assert network.json()["nodes"]
     assert "insight_summary" in network.json()["nodes"][0]
+    assert "topic_id" in network.json()["nodes"][0]
     assert keyword_insights.json()["cards"]
+    assert len(heatmap.json()["keywords"]) > 10
     assert heatmap.json()["cells"]
+    assert topics.json()["topics"]
     assert source_health.json()["rows"]
     assert lineage.json()["nodes"]
     assert lineage.json()["nodes"][0]["label_zh"]
@@ -276,6 +285,9 @@ def test_api_demo_story_and_run_workflow(tmp_path, monkeypatch):
     assert run_large.json()["stats"]["posts_inserted"] == 10000
     assert story.status_code == 200
     assert story.json()["walkthrough_steps"][0]["label"] == "Source Select"
+    assert story.json()["proof_cards"]
+    assert story.json()["evidence_metrics"]["keywords"] >= 70
+    assert story.json()["recommended_demo_path"]
     assert story.json()["architecture"]["nodes"]
     assert story.json()["lifecycle"]["edges"]
     assert any(
@@ -301,6 +313,10 @@ def test_api_posts_search_and_drilldown(tmp_path, monkeypatch):
         params={"kind": "source", "id": payload["rows"][0]["source"]},
     )
     keyword_drilldown = client.get("/analytics/drilldown", params={"kind": "keyword", "id": "AI"})
+    topic_drilldown = client.get(
+        "/analytics/drilldown",
+        params={"kind": "topic", "id": "ai_tech"},
+    )
     workflow_drilldown = client.get(
         "/analytics/drilldown",
         params={"kind": "workflow_node", "id": "policy_check"},
@@ -314,6 +330,8 @@ def test_api_posts_search_and_drilldown(tmp_path, monkeypatch):
     assert post_drilldown.json()["related_jobs"]
     assert source_drilldown.json()["summary"]["post_count"] > 0
     assert keyword_drilldown.json()["related_posts"]
+    assert topic_drilldown.json()["metadata"]["topic_id"] == "ai_tech"
+    assert topic_drilldown.json()["related_posts"]
     assert "http_403_forbidden" in workflow_drilldown.json()["quality_flags"]
 
 
