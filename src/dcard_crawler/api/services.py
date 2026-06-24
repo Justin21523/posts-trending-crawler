@@ -3,6 +3,7 @@
 import json
 from collections import Counter, defaultdict
 from datetime import datetime
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -428,6 +429,246 @@ class APIQueryService:
             ],
         }
 
+    def analytics_dashboard(self) -> dict[str, Any]:
+        """Return visualization-ready dashboard analytics."""
+        overview = self.analytics_overview()
+        trends = self.analytics_trends()
+        quality = self.analytics_data_quality()
+        return {
+            "kpis": overview["kpis"],
+            "daily_platform_volume": trends["daily_post_count"],
+            "platform_distribution": overview["platforms"],
+            "crawl_status_counts": self._crawl_status_counts(),
+            "top_keywords": overview["top_keywords"],
+            "top_posts": self.analytics_top_posts()["rows"][:10],
+            "demo_live_ratio": self._demo_live_ratio(),
+            "policy_events": quality["policy_events"],
+        }
+
+    def analytics_time_series(self) -> dict[str, Any]:
+        """Return time-series data grouped for charts."""
+        daily_platform: dict[tuple[str, str], int] = defaultdict(int)
+        daily_source: dict[tuple[str, str], int] = defaultdict(int)
+        daily_board: dict[tuple[str, str], int] = defaultdict(int)
+        with get_session() as session:
+            rows = session.execute(
+                select(
+                    Post.platform,
+                    Source.name,
+                    Post.board_or_forum,
+                    Post.published_at,
+                    Post.created_at,
+                ).join(Source, Source.id == Post.source_id)
+            ).all()
+        for platform, source_name, board, published_at, created_at in rows:
+            day = self._date_key(published_at or created_at)
+            if not day:
+                continue
+            daily_platform[(day, platform)] += 1
+            daily_source[(day, source_name)] += 1
+            if board:
+                daily_board[(day, board)] += 1
+        return {
+            "daily_by_platform": self._counter_points(daily_platform, "platform"),
+            "daily_by_source": self._counter_points(daily_source, "source"),
+            "daily_by_board": self._counter_points(daily_board, "board_or_forum"),
+        }
+
+    def analytics_keyword_network(self) -> dict[str, Any]:
+        """Return keyword co-occurrence graph data."""
+        keyword_counts: Counter[str] = Counter()
+        link_counts: Counter[tuple[str, str]] = Counter()
+        samples: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        with get_session() as session:
+            rows = session.execute(
+                select(Post.id, Post.platform, Post.title, Post.excerpt, Post.content)
+            ).all()
+        for post_id, platform, title, excerpt, content in rows:
+            text = normalize_text(" ".join([title or "", excerpt or "", content or ""]))
+            matched = sorted({kw for kw in DEMO_KEYWORDS if normalize_text(kw) in text})
+            for keyword in matched:
+                keyword_counts[keyword] += 1
+                if len(samples[keyword]) < 5:
+                    samples[keyword].append(
+                        {"post_id": post_id, "platform": platform, "title": title}
+                    )
+            for left, right in combinations(matched, 2):
+                link_counts[(left, right)] += 1
+        return {
+            "nodes": [
+                {"id": keyword, "label": keyword, "value": count, "samples": samples[keyword]}
+                for keyword, count in keyword_counts.most_common(30)
+            ],
+            "links": [
+                {"source": left, "target": right, "value": count}
+                for (left, right), count in link_counts.most_common(60)
+            ],
+        }
+
+    def analytics_keyword_heatmap(self) -> dict[str, Any]:
+        """Return platform by keyword matrix."""
+        platforms = sorted(self.platform_counts())
+        keywords = DEMO_KEYWORDS
+        matrix = {platform: dict.fromkeys(keywords, 0) for platform in platforms}
+        with get_session() as session:
+            rows = session.execute(
+                select(Post.platform, Post.title, Post.excerpt, Post.content)
+            ).all()
+        for platform, title, excerpt, content in rows:
+            text = normalize_text(" ".join([title or "", excerpt or "", content or ""]))
+            for keyword in keywords:
+                matrix.setdefault(platform, dict.fromkeys(keywords, 0))
+                matrix[platform][keyword] += text.count(normalize_text(keyword))
+        cells = [
+            {"platform": platform, "keyword": keyword, "count": count}
+            for platform, counts in matrix.items()
+            for keyword, count in counts.items()
+        ]
+        return {"platforms": platforms, "keywords": keywords, "cells": cells}
+
+    def analytics_source_health(self) -> dict[str, Any]:
+        """Return source health matrix rows."""
+        catalog = self.source_catalog_status()
+        rows = []
+        with get_session() as session:
+            job_rows = session.execute(select(CrawlJob, Source.name).join(Source)).all()
+        by_source: dict[str, list[CrawlJob]] = defaultdict(list)
+        for job, source_name in job_rows:
+            by_source[source_name].append(job)
+        for entry in catalog:
+            jobs = by_source.get(entry["name"], [])
+            success = sum(
+                1 for job in jobs if job.status in {"completed", "completed_with_warnings"}
+            )
+            failed = sum(1 for job in jobs if job.status == "failed")
+            total = len(jobs)
+            latest = max((job.started_at for job in jobs if job.started_at), default=None)
+            rows.append(
+                {
+                    "source": entry["name"],
+                    "display_name": entry["display_name"],
+                    "platform": entry["platform"],
+                    "enabled": entry["enabled"],
+                    "post_count": entry["post_count"],
+                    "success_rate": round((success / total) * 100, 1) if total else None,
+                    "failed_count": failed,
+                    "policy_events": sum(1 for job in jobs if job.error_category),
+                    "freshness": latest.isoformat() if latest else None,
+                    "last_status": entry["last_status"],
+                    "last_error": entry["last_error"],
+                }
+            )
+        return {"rows": rows}
+
+    def analytics_lineage(self) -> dict[str, Any]:
+        """Return a compact lineage graph."""
+        nodes = [
+            {"id": "sources", "label": "Sources", "type": "source"},
+            {"id": "crawl_jobs", "label": "Crawl Jobs", "type": "job"},
+            {"id": "raw_records", "label": "Raw Records", "type": "raw"},
+            {"id": "posts", "label": "Normalized Posts", "type": "post"},
+            {"id": "keyword_matches", "label": "Keyword Matches", "type": "analysis"},
+            {"id": "reports", "label": "Reports", "type": "report"},
+        ]
+        counts = self.counts()
+        nodes[0]["count"] = counts["sources"]
+        nodes[1]["count"] = counts["crawl_jobs"]
+        nodes[2]["count"] = counts["posts"]
+        nodes[3]["count"] = counts["posts"]
+        nodes[4]["count"] = sum(item["count"] for item in self.analytics_keywords()["keywords"])
+        nodes[5]["count"] = len(self.list_reports())
+        return {
+            "nodes": nodes,
+            "edges": [
+                {"source": "sources", "target": "crawl_jobs", "label": "starts"},
+                {"source": "crawl_jobs", "target": "raw_records", "label": "fetches"},
+                {"source": "raw_records", "target": "posts", "label": "normalizes"},
+                {"source": "posts", "target": "keyword_matches", "label": "analyzes"},
+                {"source": "keyword_matches", "target": "reports", "label": "exports"},
+            ],
+        }
+
+    def analytics_crawl_flow(self) -> dict[str, Any]:
+        """Return React Flow-ready crawl pipeline data."""
+        workflow = self.workflow_summary()
+        x_gap = 210
+        nodes = []
+        for index, stage in enumerate(workflow["stages"]):
+            nodes.append(
+                {
+                    "id": stage["key"],
+                    "type": "default",
+                    "position": {"x": (index % 4) * x_gap, "y": (index // 4) * 150},
+                    "data": {
+                        "label": stage["label"],
+                        "status": stage["status"],
+                        "count": stage["count"],
+                        "request_count": self.counts()["crawl_jobs"] if index < 4 else 0,
+                        "item_count": stage["count"],
+                        "failed_count": workflow["latest_error"] is not None,
+                        "latest_error": stage.get("error_reason"),
+                        "output_artifact": "SQLite / JSON report" if index >= 9 else None,
+                    },
+                }
+            )
+        edges = [
+            {
+                "id": f"{workflow['stages'][index]['key']}-{workflow['stages'][index + 1]['key']}",
+                "source": workflow["stages"][index]["key"],
+                "target": workflow["stages"][index + 1]["key"],
+                "animated": index < 5,
+            }
+            for index in range(len(workflow["stages"]) - 1)
+        ]
+        return {"nodes": nodes, "edges": edges}
+
+    def analytics_top_posts(self) -> dict[str, Any]:
+        """Return top post table rows."""
+        with get_session() as session:
+            rows = self._top_posts(session, limit=100)
+        return {"rows": rows}
+
+    def analytics_data_quality_table(self) -> dict[str, Any]:
+        """Return data quality tables for UI."""
+        with get_session() as session:
+            missing = session.execute(
+                select(Post, Source.name)
+                .join(Source)
+                .where(or_(Post.content.is_(None), Post.content == ""))
+                .limit(100)
+            ).all()
+            duplicate_hashes = session.execute(
+                select(Post.content_hash, func.count(Post.id))
+                .where(Post.content_hash.is_not(None))
+                .group_by(Post.content_hash)
+                .having(func.count(Post.id) > 1)
+            ).all()
+            failed = session.execute(
+                select(CrawlJob, Source.name)
+                .join(Source)
+                .where(CrawlJob.status == "failed")
+                .order_by(desc(CrawlJob.started_at))
+                .limit(100)
+            ).all()
+            policy = session.execute(
+                select(CrawlJob, Source.name)
+                .join(Source)
+                .where(CrawlJob.error_category.is_not(None))
+                .order_by(desc(CrawlJob.started_at))
+                .limit(100)
+            ).all()
+        return {
+            "missing_content": [
+                self._quality_post_row(post, source_name) for post, source_name in missing
+            ],
+            "duplicates": [
+                {"content_hash": content_hash, "duplicate_count": int(count)}
+                for content_hash, count in duplicate_hashes
+            ],
+            "failed_crawls": [self._job_dict(job, source_name) for job, source_name in failed],
+            "policy_blocks": [self._job_dict(job, source_name) for job, source_name in policy],
+        }
+
     def workflow_summary(self) -> dict[str, Any]:
         """Return a visual crawl workflow summary for the portfolio UI."""
         overview = self.analytics_overview()
@@ -484,6 +725,48 @@ class APIQueryService:
                 }
                 for key, label, status, count in stages
             ],
+        }
+
+    def _crawl_status_counts(self) -> list[dict[str, Any]]:
+        with get_session() as session:
+            rows = session.execute(
+                select(CrawlJob.status, func.count(CrawlJob.id)).group_by(CrawlJob.status)
+            ).all()
+        return [{"status": status, "count": int(count)} for status, count in rows]
+
+    def _demo_live_ratio(self) -> dict[str, int]:
+        with get_session() as session:
+            demo = int(
+                session.execute(
+                    select(func.count(Post.id)).where(Post.crawl_source == "demo")
+                ).scalar()
+                or 0
+            )
+            total = int(session.execute(select(func.count(Post.id))).scalar() or 0)
+        return {"demo": demo, "live": max(total - demo, 0), "total": total}
+
+    @staticmethod
+    def _counter_points(
+        counter: dict[tuple[str, str], int],
+        group_key: str,
+    ) -> list[dict[str, Any]]:
+        return [
+            {"date": day, group_key: group, "count": count}
+            for (day, group), count in sorted(counter.items())
+        ]
+
+    @staticmethod
+    def _quality_post_row(post: Post, source_name: str) -> dict[str, Any]:
+        return {
+            "id": post.id,
+            "source": source_name,
+            "platform": post.platform,
+            "external_id": post.external_id,
+            "title": post.title,
+            "board_or_forum": post.board_or_forum,
+            "published_at": post.published_at,
+            "url": post.url,
+            "content_hash": post.content_hash,
         }
 
     def _has_demo_dataset(self) -> bool:

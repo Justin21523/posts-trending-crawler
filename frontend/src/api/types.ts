@@ -191,3 +191,81 @@ export type WorkflowSummary = {
     error_reason: string | null;
   }>;
 };
+
+export type DashboardAnalytics = {
+  kpis: KPIOverview;
+  daily_platform_volume: Array<{ date: string; platform: string; count: number }>;
+  platform_distribution: Array<{ platform: string; count: number }>;
+  crawl_status_counts: Array<{ status: string; count: number }>;
+  top_keywords: Array<{ keyword: string; count: number }>;
+  top_posts: EngagementPost[];
+  demo_live_ratio: { demo: number; live: number; total: number };
+  policy_events: Array<{ category: string; count: number }>;
+};
+
+export type TimeSeriesAnalytics = {
+  daily_by_platform: Array<{ date: string; platform: string; count: number }>;
+  daily_by_source: Array<{ date: string; source: string; count: number }>;
+  daily_by_board: Array<{ date: string; board_or_forum: string; count: number }>;
+};
+
+export type KeywordNetworkAnalytics = {
+  nodes: Array<{ id: string; label: string; value: number; samples?: Array<Record<string, unknown>> }>;
+  links: Array<{ source: string; target: string; value: number }>;
+};
+
+export type KeywordHeatmapAnalytics = {
+  platforms: string[];
+  keywords: string[];
+  cells: Array<{ platform: string; keyword: string; count: number }>;
+};
+
+export type SourceHealthAnalytics = {
+  rows: Array<{
+    source: string;
+    display_name: string;
+    platform: string;
+    enabled: boolean;
+    post_count: number;
+    success_rate: number | null;
+    failed_count: number;
+    policy_events: number;
+    freshness: string | null;
+    last_status: string | null;
+    last_error: string | null;
+  }>;
+};
+
+export type GraphNode = {
+  id: string;
+  label?: string;
+  type?: string;
+  count?: number;
+  position?: { x: number; y: number };
+  data?: Record<string, unknown>;
+};
+
+export type GraphEdge = {
+  id?: string;
+  source: string;
+  target: string;
+  label?: string;
+  animated?: boolean;
+};
+
+export type LineageAnalytics = {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+};
+
+export type CrawlFlowAnalytics = {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+};
+
+export type DataQualityTableAnalytics = {
+  missing_content: Array<Record<string, unknown>>;
+  duplicates: Array<Record<string, unknown>>;
+  failed_crawls: Array<Record<string, unknown>>;
+  policy_blocks: Array<Record<string, unknown>>;
+};

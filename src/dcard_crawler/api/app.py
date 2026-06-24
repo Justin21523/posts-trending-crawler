@@ -131,6 +131,42 @@ def create_app(
     def analytics_data_quality():
         return queries.analytics_data_quality()
 
+    @app.get("/analytics/dashboard")
+    def analytics_dashboard():
+        return queries.analytics_dashboard()
+
+    @app.get("/analytics/time-series")
+    def analytics_time_series():
+        return queries.analytics_time_series()
+
+    @app.get("/analytics/keyword-network")
+    def analytics_keyword_network():
+        return queries.analytics_keyword_network()
+
+    @app.get("/analytics/keyword-heatmap")
+    def analytics_keyword_heatmap():
+        return queries.analytics_keyword_heatmap()
+
+    @app.get("/analytics/source-health")
+    def analytics_source_health():
+        return queries.analytics_source_health()
+
+    @app.get("/analytics/lineage")
+    def analytics_lineage():
+        return queries.analytics_lineage()
+
+    @app.get("/analytics/crawl-flow")
+    def analytics_crawl_flow():
+        return queries.analytics_crawl_flow()
+
+    @app.get("/analytics/top-posts")
+    def analytics_top_posts():
+        return queries.analytics_top_posts()
+
+    @app.get("/analytics/data-quality-table")
+    def analytics_data_quality_table():
+        return queries.analytics_data_quality_table()
+
     @app.get("/workflow/summary")
     def workflow_summary():
         return queries.workflow_summary()

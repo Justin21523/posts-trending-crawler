@@ -192,3 +192,32 @@ def test_api_analytics_endpoints_after_demo_seed(tmp_path, monkeypatch):
     assert platforms.json()["platforms"]
     assert quality.json()["demo_records"] == 120
     assert workflow.json()["stages"][0]["label"] == "Source Select"
+
+
+def test_api_visualization_endpoints_after_demo_seed(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
+    monkeypatch.chdir(tmp_path)
+    init_db(reset=True)
+    DemoSeedService(report_root=tmp_path / "data" / "reports").seed(rows=120, reset_demo=True)
+    client = TestClient(create_app(control_service=FakeControlService()))
+
+    dashboard = client.get("/analytics/dashboard")
+    time_series = client.get("/analytics/time-series")
+    network = client.get("/analytics/keyword-network")
+    heatmap = client.get("/analytics/keyword-heatmap")
+    source_health = client.get("/analytics/source-health")
+    lineage = client.get("/analytics/lineage")
+    crawl_flow = client.get("/analytics/crawl-flow")
+    top_posts = client.get("/analytics/top-posts")
+    quality_table = client.get("/analytics/data-quality-table")
+
+    assert dashboard.status_code == 200
+    assert dashboard.json()["daily_platform_volume"]
+    assert time_series.json()["daily_by_platform"]
+    assert network.json()["nodes"]
+    assert heatmap.json()["cells"]
+    assert source_health.json()["rows"]
+    assert lineage.json()["nodes"]
+    assert crawl_flow.json()["nodes"][0]["data"]["label"] == "Source Select"
+    assert top_posts.json()["rows"]
+    assert "missing_content" in quality_table.json()

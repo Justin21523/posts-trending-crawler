@@ -252,6 +252,10 @@ h2 {
   gap: 14px;
 }
 
+.analytics-grid {
+  align-items: stretch;
+}
+
 .panel {
   min-width: 0;
   padding: 16px;
@@ -651,6 +655,129 @@ h2 {
   overflow-x: auto;
 }
 
+.ratio-meter {
+  height: 14px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.ratio-meter div {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+}
+
+.flow-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 14px;
+}
+
+.flow-panel {
+  min-height: 560px;
+}
+
+.flow-panel .react-flow {
+  min-height: 500px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.flow-node {
+  min-width: 150px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--color-text);
+  font-weight: 800;
+}
+
+.flow-node-completed,
+.lineage-node-post,
+.lineage-node-report {
+  border-color: #99f6e4;
+  background: #f0fdfa;
+}
+
+.flow-node-completed-with-warnings,
+.lineage-node-analysis {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.lineage-panel .react-flow {
+  min-height: 360px;
+}
+
+.node-detail-panel {
+  align-self: start;
+  max-height: 620px;
+  overflow: auto;
+}
+
+.network-panel {
+  overflow: hidden;
+}
+
+.heatmap-grid {
+  display: grid;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.heatmap-grid strong,
+.heatmap-grid span {
+  display: grid;
+  min-height: 36px;
+  min-width: 64px;
+  place-items: center;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.heatmap-grid span {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.tab-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tab-row button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.tab-row button.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.json-panel {
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
 .drawer {
   position: fixed;
   top: 0;
@@ -805,6 +932,7 @@ td p {
   .dashboard-grid,
   .page-grid,
   .catalog-grid,
+  .flow-layout,
   .source-layout,
   .filters,
   .workflow-grid {

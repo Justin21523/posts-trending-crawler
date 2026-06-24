@@ -1,4 +1,20 @@
 import {
+  Background,
+  Controls,
+  MiniMap,
+  ReactFlow,
+  type Edge,
+  type Node,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type ColumnDef,
+} from '@tanstack/react-table';
+import ForceGraph2D from 'react-force-graph-2d';
+import {
   Activity,
   BarChart3,
   BookOpenCheck,
@@ -18,11 +34,20 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
+  Pie,
+  PieChart,
+  PolarAngleAxis,
+  PolarGrid,
+  Radar,
+  RadarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -32,16 +57,25 @@ import { api, type PostFilters } from './api/client';
 import type {
   AnalyticsOverview,
   CrawlJobResponse,
+  CrawlFlowAnalytics,
   DataQualityAnalytics,
+  DataQualityTableAnalytics,
+  DashboardAnalytics,
   DashboardSummary,
   DiagnosticsResponse,
   EngagementAnalytics,
+  GraphNode,
+  KeywordHeatmapAnalytics,
   KeywordAnalytics,
+  KeywordNetworkAnalytics,
+  LineageAnalytics,
   PlatformAnalytics,
   PostResponse,
   ReportSummary,
   SourceCatalogEntryStatus,
+  SourceHealthAnalytics,
   SourceResponse,
+  TimeSeriesAnalytics,
   TrendAnalytics,
   VerifyResponse,
   WorkflowSummary,
@@ -85,10 +119,20 @@ const pages: Array<{ key: PageKey; label: string; icon: typeof Activity }> = [
   { key: 'settings', label: 'Settings', icon: Settings },
 ];
 
+const chartColors = ['#2563eb', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#0891b2'];
+
 export function App() {
   const [activePage, setActivePage] = useState<PageKey>('overview');
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
+  const [dashboard, setDashboard] = useState<DashboardAnalytics | null>(null);
+  const [timeSeries, setTimeSeries] = useState<TimeSeriesAnalytics | null>(null);
+  const [keywordNetwork, setKeywordNetwork] = useState<KeywordNetworkAnalytics | null>(null);
+  const [keywordHeatmap, setKeywordHeatmap] = useState<KeywordHeatmapAnalytics | null>(null);
+  const [sourceHealth, setSourceHealth] = useState<SourceHealthAnalytics | null>(null);
+  const [lineage, setLineage] = useState<LineageAnalytics | null>(null);
+  const [crawlFlow, setCrawlFlow] = useState<CrawlFlowAnalytics | null>(null);
+  const [dataQualityTable, setDataQualityTable] = useState<DataQualityTableAnalytics | null>(null);
   const [trends, setTrends] = useState<TrendAnalytics | null>(null);
   const [keywords, setKeywords] = useState<KeywordAnalytics | null>(null);
   const [engagement, setEngagement] = useState<EngagementAnalytics | null>(null);
@@ -114,6 +158,14 @@ export function App() {
         nextJobs,
         nextReports,
         nextOverview,
+        nextDashboard,
+        nextTimeSeries,
+        nextKeywordNetwork,
+        nextKeywordHeatmap,
+        nextSourceHealth,
+        nextLineage,
+        nextCrawlFlow,
+        nextDataQualityTable,
         nextTrends,
         nextKeywords,
         nextEngagement,
@@ -127,6 +179,14 @@ export function App() {
         api.jobs(),
         api.reports(),
         api.analytics.overview(),
+        api.analytics.dashboard(),
+        api.analytics.timeSeries(),
+        api.analytics.keywordNetwork(),
+        api.analytics.keywordHeatmap(),
+        api.analytics.sourceHealth(),
+        api.analytics.lineage(),
+        api.analytics.crawlFlow(),
+        api.analytics.dataQualityTable(),
         api.analytics.trends(),
         api.analytics.keywords(),
         api.analytics.engagement(),
@@ -140,6 +200,14 @@ export function App() {
       setJobs(nextJobs);
       setReports(nextReports);
       setOverview(nextOverview);
+      setDashboard(nextDashboard);
+      setTimeSeries(nextTimeSeries);
+      setKeywordNetwork(nextKeywordNetwork);
+      setKeywordHeatmap(nextKeywordHeatmap);
+      setSourceHealth(nextSourceHealth);
+      setLineage(nextLineage);
+      setCrawlFlow(nextCrawlFlow);
+      setDataQualityTable(nextDataQualityTable);
       setTrends(nextTrends);
       setKeywords(nextKeywords);
       setEngagement(nextEngagement);
@@ -239,13 +307,13 @@ export function App() {
         return (
           <>
             <SummaryCards summary={summary} />
-            <OverviewDashboard overview={overview} trends={trends} jobs={jobs} />
+            <OverviewDashboard dashboard={dashboard} jobs={jobs} />
           </>
         );
       case 'sources':
         return <SourceRegistry sources={sources} catalog={sourceCatalog} summary={summary} />;
       case 'workflow':
-        return <WorkflowPage workflow={workflow} />;
+        return <WorkflowPage workflow={workflow} crawlFlow={crawlFlow} />;
       case 'runs':
         return <JobsTimeline jobs={jobs} />;
       case 'explorer':
@@ -259,15 +327,21 @@ export function App() {
           />
         );
       case 'trends':
-        return <TrendPage trends={trends} />;
+        return <TrendPage trends={trends} timeSeries={timeSeries} />;
       case 'keywords':
-        return <KeywordPage keywords={keywords} />;
+        return (
+          <KeywordPage
+            keywords={keywords}
+            network={keywordNetwork}
+            heatmap={keywordHeatmap}
+          />
+        );
       case 'engagement':
         return <EngagementPage engagement={engagement} />;
       case 'platforms':
-        return <PlatformPage platforms={platforms} />;
+        return <PlatformPage platforms={platforms} sourceHealth={sourceHealth} />;
       case 'quality':
-        return <QualityPage quality={quality} />;
+        return <QualityPage quality={quality} lineage={lineage} table={dataQualityTable} />;
       case 'reports':
         return <ReportsCenter reports={reports} />;
       case 'compliance':
@@ -290,80 +364,128 @@ export function App() {
 }
 
 function OverviewDashboard({
-  overview,
-  trends,
+  dashboard,
   jobs,
 }: {
-  overview: AnalyticsOverview | null;
-  trends: TrendAnalytics | null;
+  dashboard: DashboardAnalytics | null;
   jobs: CrawlJobResponse[];
 }) {
-  const platformData = overview?.platforms ?? [];
-  const dailyData = compressDailyTrends(trends?.daily_post_count ?? []);
+  const areaData = pivotSeries(dashboard?.daily_platform_volume ?? [], 'platform');
+  const platforms = uniqueGroups(dashboard?.daily_platform_volume ?? [], 'platform');
+  const ratio = dashboard?.demo_live_ratio ?? { demo: 0, live: 0, total: 0 };
+  const topPostColumns: ColumnDef<Record<string, unknown>>[] = [
+    { accessorKey: 'platform', header: 'Platform' },
+    { accessorKey: 'title', header: 'Title' },
+    { accessorKey: 'engagement_score', header: 'Score' },
+    { accessorKey: 'comment_count', header: 'Comments' },
+  ];
+
   return (
-    <section className="page-grid">
-      <div className="panel">
+    <section className="page-grid analytics-grid">
+      <div className="panel wide-panel">
         <div className="panel-header">
-          <h2>Platform Volume</h2>
+          <h2>Daily Platform Volume</h2>
+          <span className="pill">stacked area</span>
         </div>
-        <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={platformData}>
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={areaData}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="platform" />
+            <XAxis dataKey="date" minTickGap={18} />
             <YAxis allowDecimals={false} />
             <Tooltip />
-            <Bar dataKey="count" fill="#1f7a5f" radius={[4, 4, 0, 0]} />
+            {platforms.map((platform, index) => (
+              <Area
+                key={platform}
+                type="monotone"
+                dataKey={platform}
+                stackId="posts"
+                stroke={chartColors[index % chartColors.length]}
+                fill={chartColors[index % chartColors.length]}
+                fillOpacity={0.72}
+              />
+            ))}
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <h2>Platform Distribution</h2>
+        </div>
+        <ResponsiveContainer width="100%" height={260}>
+          <PieChart>
+            <Pie
+              data={dashboard?.platform_distribution ?? []}
+              dataKey="count"
+              nameKey="platform"
+              innerRadius={58}
+              outerRadius={92}
+              paddingAngle={2}
+            >
+              {(dashboard?.platform_distribution ?? []).map((entry, index) => (
+                <Cell key={entry.platform} fill={chartColors[index % chartColors.length]} />
+              ))}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <h2>Demo / Live Ratio</h2>
+        </div>
+        <div className="ratio-meter">
+          <div style={{ width: `${ratio.total ? (ratio.demo / ratio.total) * 100 : 0}%` }} />
+        </div>
+        <div className="metadata-list">
+          <div className="metadata-row"><strong>Demo records</strong><span>{ratio.demo}</span></div>
+          <div className="metadata-row"><strong>Live records</strong><span>{ratio.live}</span></div>
+          <div className="metadata-row"><strong>Total records</strong><span>{ratio.total}</span></div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-header">
+          <h2>Crawl Outcome</h2>
+        </div>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={dashboard?.crawl_status_counts ?? []} layout="vertical">
+            <XAxis type="number" allowDecimals={false} />
+            <YAxis type="category" dataKey="status" width={120} />
+            <Tooltip />
+            <Bar dataKey="count" fill="var(--color-primary)" radius={[0, 6, 6, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Daily Posts</h2>
-        </div>
-        <ResponsiveContainer width="100%" height={240}>
-          <LineChart data={dailyData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" minTickGap={20} />
-            <YAxis allowDecimals={false} />
-            <Tooltip />
-            <Line type="monotone" dataKey="count" stroke="#1455d9" strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+
       <div className="panel">
         <div className="panel-header">
           <h2>Top Keywords</h2>
         </div>
-        <div className="keyword-list">
-          {(overview?.top_keywords ?? []).map((item) => (
-            <span className="keyword-chip" key={item.keyword}>
-              {item.keyword}<strong>{item.count}</strong>
-            </span>
-          ))}
-        </div>
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={dashboard?.top_keywords ?? []} layout="vertical">
+            <XAxis type="number" allowDecimals={false} />
+            <YAxis type="category" dataKey="keyword" width={86} />
+            <Tooltip />
+            <Bar dataKey="count" fill="var(--color-secondary)" radius={[0, 6, 6, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
-      <div className="panel">
+
+      <div className="panel wide-panel">
         <div className="panel-header">
           <h2>Latest Hot Posts</h2>
         </div>
-        <div className="ranked-list">
-          {(overview?.top_posts ?? []).slice(0, 6).map((post) => (
-            <div className="ranked-row" key={post.id}>
-              <div>
-                <strong>{post.title}</strong>
-                <span>{post.platform} / {post.board_or_forum ?? '-'}</span>
-              </div>
-              <b>{post.engagement_score}</b>
-            </div>
-          ))}
-        </div>
+        <DataTable columns={topPostColumns} data={(dashboard?.top_posts ?? []) as Array<Record<string, unknown>>} />
       </div>
+
       <div className="panel wide-panel">
         <div className="panel-header">
           <h2>Recent Crawl Timeline</h2>
         </div>
         <div className="job-list">
-          {jobs.slice(0, 6).map((job) => (
+          {jobs.slice(0, 8).map((job) => (
             <div className="job-row" key={job.id}>
               <div>
                 <div className="job-title">{job.source} / {job.job_type}</div>
@@ -440,31 +562,47 @@ function SourceRegistry({
   );
 }
 
-function WorkflowPage({ workflow }: { workflow: WorkflowSummary | null }) {
+function WorkflowPage({
+  workflow,
+  crawlFlow,
+}: {
+  workflow: WorkflowSummary | null;
+  crawlFlow: CrawlFlowAnalytics | null;
+}) {
+  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const nodes = (crawlFlow?.nodes ?? []).map((node) => ({
+    ...node,
+    className: `flow-node flow-node-${String(node.data?.status ?? 'unknown').replaceAll('_', '-')}`,
+  })) as Node[];
+  const edges = (crawlFlow?.edges ?? []) as Edge[];
+
   return (
-    <section className="panel wide-panel">
-      <div className="panel-header">
-        <h2>Crawl Pipeline</h2>
-        {workflow?.latest_error && <span className="pill">latest stop condition captured</span>}
+    <section className="flow-layout">
+      <div className="panel flow-panel">
+        <div className="panel-header">
+          <h2>Crawler Pipeline Graph</h2>
+          {workflow?.latest_error && <span className="pill">latest stop condition captured</span>}
+        </div>
+        <ReactFlow nodes={nodes} edges={edges} fitView onNodeClick={(_, node) => setSelectedNode(node as unknown as GraphNode)}>
+          <MiniMap />
+          <Controls />
+          <Background />
+        </ReactFlow>
       </div>
-      <div className="workflow-grid">
-        {(workflow?.stages ?? []).map((stage, index) => (
-          <div className="workflow-step" key={stage.key}>
-            <span className="step-index">{index + 1}</span>
-            <div>
-              <strong>{stage.label}</strong>
-              <p>{stage.count} records/events</p>
-              {stage.error_reason && <small>{stage.error_reason}</small>}
-            </div>
-            <StatusBadge value={stage.status} />
-          </div>
-        ))}
-      </div>
+      <NodeDetailPanel node={selectedNode ?? (crawlFlow?.nodes?.[0] ?? null)} title="Pipeline Node Detail" />
     </section>
   );
 }
 
-function TrendPage({ trends }: { trends: TrendAnalytics | null }) {
+function TrendPage({
+  trends,
+  timeSeries,
+}: {
+  trends: TrendAnalytics | null;
+  timeSeries: TimeSeriesAnalytics | null;
+}) {
+  const sourceData = pivotSeries(timeSeries?.daily_by_source ?? [], 'source');
+  const sources = uniqueGroups(timeSeries?.daily_by_source ?? [], 'source').slice(0, 6);
   return (
     <section className="page-grid">
       <div className="panel wide-panel">
@@ -477,8 +615,22 @@ function TrendPage({ trends }: { trends: TrendAnalytics | null }) {
             <XAxis dataKey="date" />
             <YAxis allowDecimals={false} />
             <Tooltip />
-            <Line type="monotone" dataKey="count" stroke="#1455d9" strokeWidth={2} />
+            <Line type="monotone" dataKey="count" stroke="var(--color-primary)" strokeWidth={2} />
           </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="panel wide-panel">
+        <div className="panel-header"><h2>Source Trend</h2></div>
+        <ResponsiveContainer width="100%" height={280}>
+          <AreaChart data={sourceData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" />
+            <YAxis allowDecimals={false} />
+            <Tooltip />
+            {sources.map((source, index) => (
+              <Area key={source} type="monotone" dataKey={source} stackId="source" stroke={chartColors[index % chartColors.length]} fill={chartColors[index % chartColors.length]} fillOpacity={0.55} />
+            ))}
+          </AreaChart>
         </ResponsiveContainer>
       </div>
       <SimpleList title="Top Boards / Forums" rows={(trends?.top_boards ?? []).map((item) => [item.board_or_forum, item.count])} />
@@ -486,14 +638,70 @@ function TrendPage({ trends }: { trends: TrendAnalytics | null }) {
   );
 }
 
-function KeywordPage({ keywords }: { keywords: KeywordAnalytics | null }) {
+function KeywordPage({
+  keywords,
+  network,
+  heatmap,
+}: {
+  keywords: KeywordAnalytics | null;
+  network: KeywordNetworkAnalytics | null;
+  heatmap: KeywordHeatmapAnalytics | null;
+}) {
+  const [selectedNode, setSelectedNode] = useState<Record<string, unknown> | null>(null);
+  const heatmapMax = Math.max(...(heatmap?.cells ?? []).map((cell) => cell.count), 1);
+  const phraseColumns: ColumnDef<Record<string, unknown>>[] = [
+    { accessorKey: 'keyword', header: 'Keyword' },
+    { accessorKey: 'count', header: 'Count' },
+  ];
+
   return (
-    <section className="page-grid">
-      <SimpleList title="Keyword Frequency" rows={(keywords?.keywords ?? []).map((item) => [item.keyword, item.count])} />
-      <SimpleList
-        title="Platform Keyword Distribution"
-        rows={(keywords?.by_platform ?? []).slice(0, 16).map((item) => [`${item.platform} / ${item.keyword}`, item.count])}
-      />
+    <section className="page-grid analytics-grid">
+      <div className="panel">
+        <div className="panel-header"><h2>Keyword Frequency</h2></div>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={keywords?.keywords ?? []} layout="vertical">
+            <XAxis type="number" allowDecimals={false} />
+            <YAxis type="category" dataKey="keyword" width={90} />
+            <Tooltip />
+            <Bar dataKey="count" fill="var(--color-primary)" radius={[0, 6, 6, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="panel network-panel">
+        <div className="panel-header"><h2>Keyword Co-occurrence Network</h2></div>
+        <ForceGraph2D
+          graphData={{ nodes: network?.nodes ?? [], links: network?.links ?? [] }}
+          nodeLabel="label"
+          nodeVal="value"
+          linkWidth={(link) => Math.max(1, Number(link.value ?? 1) / 6)}
+          nodeColor={() => 'var(--color-primary)'}
+          onNodeClick={(node) => setSelectedNode(node as Record<string, unknown>)}
+          width={520}
+          height={320}
+        />
+      </div>
+      <div className="panel wide-panel">
+        <div className="panel-header"><h2>Platform x Keyword Heatmap</h2></div>
+        <div className="heatmap-grid" style={{ gridTemplateColumns: `140px repeat(${heatmap?.keywords.length ?? 1}, minmax(70px, 1fr))` }}>
+          <span />
+          {(heatmap?.keywords ?? []).map((keyword) => <strong key={keyword}>{keyword}</strong>)}
+          {(heatmap?.platforms ?? []).flatMap((platform) => [
+            <strong key={`${platform}-label`}>{platform}</strong>,
+            ...(heatmap?.keywords ?? []).map((keyword) => {
+              const count = heatmap?.cells.find((cell) => cell.platform === platform && cell.keyword === keyword)?.count ?? 0;
+              return <span key={`${platform}-${keyword}`} style={{ opacity: 0.25 + (count / heatmapMax) * 0.75 }}>{count}</span>;
+            }),
+          ])}
+        </div>
+      </div>
+      <div className="panel">
+        <div className="panel-header"><h2>Top Phrase Table</h2></div>
+        <DataTable columns={phraseColumns} data={(keywords?.keywords ?? []) as Array<Record<string, unknown>>} />
+      </div>
+      <div className="panel">
+        <div className="panel-header"><h2>Selected Keyword Node</h2></div>
+        {selectedNode ? <pre className="json-panel">{JSON.stringify(selectedNode, null, 2)}</pre> : <div className="empty-state">Click a network node.</div>}
+      </div>
     </section>
   );
 }
@@ -529,54 +737,128 @@ function EngagementPage({ engagement }: { engagement: EngagementAnalytics | null
   );
 }
 
-function PlatformPage({ platforms }: { platforms: PlatformAnalytics | null }) {
+function PlatformPage({
+  platforms,
+  sourceHealth,
+}: {
+  platforms: PlatformAnalytics | null;
+  sourceHealth: SourceHealthAnalytics | null;
+}) {
+  const platformRows = platforms?.platforms ?? [];
+  const radarData = platformRows.map((row) => ({
+    platform: row.platform,
+    volume: row.post_count,
+    engagement: row.average_engagement_score,
+    content: row.average_content_length,
+    success: row.crawl_success_rate ?? 0,
+  }));
+  const sourceColumns: ColumnDef<Record<string, unknown>>[] = [
+    { accessorKey: 'display_name', header: 'Source' },
+    { accessorKey: 'platform', header: 'Platform' },
+    { accessorKey: 'post_count', header: 'Posts' },
+    { accessorKey: 'success_rate', header: 'Success %' },
+    { accessorKey: 'failed_count', header: 'Failed' },
+    { accessorKey: 'last_status', header: 'Last Status' },
+  ];
+
   return (
-    <section className="panel wide-panel">
-      <div className="panel-header">
-        <h2>Cross-platform Comparison</h2>
+    <section className="page-grid analytics-grid">
+      <div className="panel">
+        <div className="panel-header"><h2>Platform Volume</h2></div>
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={platformRows}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="platform" />
+            <YAxis allowDecimals={false} />
+            <Tooltip />
+            <Bar dataKey="post_count" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Platform</th>
-              <th>Posts</th>
-              <th>Avg Content Length</th>
-              <th>Avg Engagement</th>
-              <th>Crawl Success Rate</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(platforms?.platforms ?? []).map((platform) => (
-              <tr key={platform.platform}>
-                <td>{platform.platform}</td>
-                <td>{platform.post_count}</td>
-                <td>{platform.average_content_length}</td>
-                <td>{platform.average_engagement_score}</td>
-                <td>{platform.crawl_success_rate ?? '-'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="panel">
+        <div className="panel-header"><h2>Schema Normalization Radar</h2></div>
+        <ResponsiveContainer width="100%" height={280}>
+          <RadarChart data={radarData}>
+            <PolarGrid />
+            <PolarAngleAxis dataKey="platform" />
+            <Radar name="Volume" dataKey="volume" stroke="var(--color-primary)" fill="var(--color-primary)" fillOpacity={0.28} />
+            <Radar name="Engagement" dataKey="engagement" stroke="var(--color-secondary)" fill="var(--color-secondary)" fillOpacity={0.22} />
+            <Tooltip />
+          </RadarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="panel">
+        <div className="panel-header"><h2>Average Content Length</h2></div>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={platformRows}>
+            <XAxis dataKey="platform" />
+            <YAxis allowDecimals={false} />
+            <Tooltip />
+            <Bar dataKey="average_content_length" fill="var(--color-secondary)" radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="panel">
+        <div className="panel-header"><h2>Crawl Success Rate</h2></div>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={platformRows}>
+            <XAxis dataKey="platform" />
+            <YAxis allowDecimals={false} />
+            <Tooltip />
+            <Bar dataKey="crawl_success_rate" fill="var(--color-warning)" radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="panel wide-panel">
+        <div className="panel-header"><h2>Source Health Matrix</h2></div>
+        <DataTable columns={sourceColumns} data={(sourceHealth?.rows ?? []) as Array<Record<string, unknown>>} />
       </div>
     </section>
   );
 }
 
-function QualityPage({ quality }: { quality: DataQualityAnalytics | null }) {
+function QualityPage({
+  quality,
+  lineage,
+  table,
+}: {
+  quality: DataQualityAnalytics | null;
+  lineage: LineageAnalytics | null;
+  table: DataQualityTableAnalytics | null;
+}) {
+  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [activeTable, setActiveTable] = useState<keyof DataQualityTableAnalytics>('missing_content');
+  const lineageNodes = (lineage?.nodes ?? []).map((node, index) => ({
+    id: node.id,
+    position: { x: index * 190, y: index % 2 ? 140 : 20 },
+    data: { label: `${node.label ?? node.id} (${node.count ?? 0})`, ...node },
+    className: `flow-node lineage-node-${node.type ?? 'default'}`,
+  })) as Node[];
+  const lineageEdges = (lineage?.edges ?? []).map((edge, index) => ({ id: edge.id ?? `edge-${index}`, ...edge })) as Edge[];
+  const rows = (table?.[activeTable] ?? []) as Array<Record<string, unknown>>;
+  const columns = columnsForRows(rows);
+
   return (
-    <section className="page-grid">
+    <section className="page-grid analytics-grid">
+      <div className="panel wide-panel flow-panel lineage-panel">
+        <div className="panel-header"><h2>Data Lineage Graph</h2></div>
+        <ReactFlow nodes={lineageNodes} edges={lineageEdges} fitView onNodeClick={(_, node) => setSelectedNode(node as unknown as GraphNode)}>
+          <MiniMap />
+          <Controls />
+          <Background />
+        </ReactFlow>
+      </div>
+      <NodeDetailPanel node={selectedNode ?? (lineage?.nodes?.[0] ?? null)} title="Lineage Node Detail" />
       <SimpleList title="Data Quality Checks" rows={(quality?.checks ?? []).map((item) => [item.name, item.count])} />
       <SimpleList title="Policy Events" rows={(quality?.policy_events ?? []).map((item) => [item.category, item.count])} />
       <div className="panel wide-panel">
-        <div className="panel-header">
-          <h2>Lineage Model</h2>
-        </div>
-        <div className="lineage-strip">
-          {['source', 'crawl_run', 'raw_response', 'parser', 'normalized_record', 'analysis_result'].map((item) => (
-            <span key={item}>{item}</span>
+        <div className="panel-header"><h2>Quality Tables</h2></div>
+        <div className="tab-row">
+          {(['missing_content', 'duplicates', 'failed_crawls', 'policy_blocks'] as Array<keyof DataQualityTableAnalytics>).map((key) => (
+            <button key={key} className={activeTable === key ? 'active' : ''} type="button" onClick={() => setActiveTable(key)}>{key}</button>
           ))}
         </div>
+        <DataTable columns={columns} data={rows} />
       </div>
     </section>
   );
@@ -682,6 +964,64 @@ function SettingsPage({ status }: { status: string }) {
   );
 }
 
+function DataTable({ columns, data }: { columns: ColumnDef<Record<string, unknown>>[]; data: Array<Record<string, unknown>> }) {
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+  if (!data.length) {
+    return <div className="empty-state">No table rows.</div>;
+  }
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <th key={header.id}>
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </th>
+              ))}
+            </tr>
+          ))}
+        </thead>
+        <tbody>
+          {table.getRowModel().rows.map((row) => (
+            <tr key={row.id}>
+              {row.getVisibleCells().map((cell) => (
+                <td key={cell.id}>{String(cell.getValue() ?? '-')}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function NodeDetailPanel({ node, title }: { node: GraphNode | null; title: string }) {
+  const payload = node?.data ?? node ?? {};
+  return (
+    <aside className="panel node-detail-panel">
+      <div className="panel-header"><h2>{title}</h2></div>
+      {node ? (
+        <div className="metadata-list">
+          {Object.entries(payload).map(([key, value]) => (
+            <div className="metadata-row" key={key}>
+              <strong>{key}</strong>
+              <span>{typeof value === 'object' ? JSON.stringify(value) : String(value ?? '-')}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">Click a node.</div>
+      )}
+    </aside>
+  );
+}
+
 function SimpleList({ title, rows }: { title: string; rows: Array<[string, number | string]> }) {
   return (
     <div className="panel">
@@ -738,4 +1078,28 @@ function compressDailyTrends(rows: Array<{ date: string; platform: string; count
   return Array.from(totals.entries())
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([date, count]) => ({ date, count }));
+}
+
+function pivotSeries<T extends Record<string, string | number>>(
+  rows: T[],
+  groupKey: keyof T,
+): Array<Record<string, string | number>> {
+  const map = new Map<string, Record<string, string | number>>();
+  rows.forEach((row) => {
+    const date = String(row.date);
+    const group = String(row[groupKey]);
+    const next = map.get(date) ?? { date };
+    next[group] = Number(next[group] ?? 0) + Number(row.count ?? 0);
+    map.set(date, next);
+  });
+  return Array.from(map.values()).sort((left, right) => String(left.date).localeCompare(String(right.date)));
+}
+
+function uniqueGroups<T extends Record<string, string | number>>(rows: T[], groupKey: keyof T): string[] {
+  return Array.from(new Set(rows.map((row) => String(row[groupKey]))));
+}
+
+function columnsForRows(rows: Array<Record<string, unknown>>): ColumnDef<Record<string, unknown>>[] {
+  const keys = Object.keys(rows[0] ?? {}).slice(0, 6);
+  return keys.map((key) => ({ accessorKey: key, header: key }));
 }
