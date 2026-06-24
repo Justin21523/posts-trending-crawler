@@ -232,6 +232,39 @@ npm run dev -- --host 127.0.0.1 --port 5173
 The UI opens at `http://127.0.0.1:5173` and reads API data from
 `http://127.0.0.1:8000` by default. Override with `VITE_API_BASE_URL` if needed.
 
+### Portfolio UI Demo Media
+
+The portfolio UI has a Playwright-verified demo flow with screenshots and a
+recorded walkthrough.
+
+- Full walkthrough video: [`docs/demo/videos/full-guided-demo.webm`](docs/demo/videos/full-guided-demo.webm)
+- Verification manifest: [`docs/demo/verification-manifest.md`](docs/demo/verification-manifest.md)
+
+![Overview dashboard](docs/demo/screenshots/overview-01.png)
+![Guided pipeline upload and preview](docs/demo/screenshots/guided-pipeline-01.png)
+![Guided pipeline after uploaded CSV](docs/demo/screenshots/guided-demo-after-upload.png)
+![Data Journey Studio](docs/demo/screenshots/data-journey-01.png)
+![Assistant spotlight overlay](docs/demo/screenshots/assistant-stage-overlay.png)
+![Keyword mining network](docs/demo/screenshots/keyword-mining-01.png)
+![Excel report center](docs/demo/screenshots/excel-report-center-01.png)
+![Compliance diagnostics](docs/demo/screenshots/compliance-diagnostics-01.png)
+
+The verification covers all core sidebar pages, long-page segmented screenshots,
+the floating guided assistant, Data Journey visualization, Guided Pipeline sample
+and upload preview, report/detail routes, and fatal browser error detection.
+
+```bash
+conda activate data_env
+dcard-crawler serve-api --host 127.0.0.1 --port 8001
+
+cd frontend
+VITE_API_BASE_URL=http://127.0.0.1:8001 npm run dev -- --host 127.0.0.1 --port 5176
+
+# From the project root, in another shell:
+conda activate data_env
+python scripts/verify_portfolio_ui.py
+```
+
 ## Architecture
 
 ### Dual-Mode Design
