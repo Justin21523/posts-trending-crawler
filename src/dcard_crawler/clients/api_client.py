@@ -1,18 +1,15 @@
-"""HTTP client for Dcard API endpoints with rate limiting and retry logic."""
-
-import asyncio
-import time
+"""Compatibility client for Dcard API endpoints."""
 
 import httpx
 from loguru import logger
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from dcard_crawler.core.http_client import CrawlerHttpClient
 from dcard_crawler.schemas import PostDetail, PostListItem
 from dcard_crawler.settings import settings
 
 
 class DcardAPIClient:
-    """Async HTTP client for Dcard API with built-in rate limiting and retries."""
+    """Async Dcard API client backed by the shared crawler core."""
 
     def __init__(
         self,
@@ -21,67 +18,19 @@ class DcardAPIClient:
     ):
         self.base_url = base_url or settings.dcard_api_base_url
         self.rate_limit = rate_limit or settings.crawler.rate_limit_per_second
-        self._last_request_time = 0.0
-        self._client: httpx.AsyncClient | None = None
-
         self.headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
+            **CrawlerHttpClient.default_headers(),
             "Accept": "application/json",
-            "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
             "Referer": "https://www.dcard.tw/",
         }
+        self._client = CrawlerHttpClient(base_url=self.base_url, headers=self.headers)
 
-    async def _get_client(self) -> httpx.AsyncClient:
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(
-                base_url=self.base_url,
-                headers=self.headers,
-                timeout=httpx.Timeout(30.0),
-                follow_redirects=True,
-                verify=settings.ssl_verify,
-            )
-        return self._client
+    async def close(self) -> None:
+        await self._client.close()
 
-    async def close(self):
-        if self._client and not self._client.is_closed:
-            await self._client.aclose()
-
-    async def _rate_limit_wait(self):
-        """Enforce rate limiting between requests."""
-        now = time.time()
-        elapsed = now - self._last_request_time
-        min_interval = 1.0 / self.rate_limit
-        if elapsed < min_interval:
-            wait_time = min_interval - elapsed
-            logger.debug(f"Rate limiting: waiting {wait_time:.2f}s")
-            await asyncio.sleep(wait_time)
-        self._last_request_time = time.time()
-
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=30),
-        retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)),
-        reraise=True,
-    )
     async def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
-        """Make HTTP request with retry and error handling."""
-        await self._rate_limit_wait()
-        client = await self._get_client()
-
-        response = await client.request(method, url, **kwargs)
-
-        if response.status_code == 429:
-            logger.warning("Rate limited (429). Backing off...")
-            raise httpx.HTTPStatusError("Rate limited", request=response.request, response=response)
-        elif response.status_code >= 400:
-            logger.warning(f"HTTP {response.status_code} for {url}")
-            response.raise_for_status()
-
-        return response
+        """Make HTTP request with shared policy checks."""
+        return await self._client.request(method, url, **kwargs)
 
     async def fetch_forum_posts(
         self,

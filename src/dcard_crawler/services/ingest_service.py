@@ -6,11 +6,13 @@ from datetime import datetime
 from loguru import logger
 
 from dcard_crawler.clients.api_client import DcardAPIClient
+from dcard_crawler.connectors.base import ConnectorTarget
+from dcard_crawler.connectors.dcard import DcardConnector
 from dcard_crawler.parsers.post_parser import PostParser
 from dcard_crawler.repositories.crawl_job_repository import CrawlJobRepository
 from dcard_crawler.repositories.post_repository import PostRepository
 from dcard_crawler.repositories.source_repository import SourceRepository
-from dcard_crawler.schemas import Checkpoint
+from dcard_crawler.schemas import Checkpoint, PostListItem
 from dcard_crawler.services.checkpoint_service import CheckpointService
 from dcard_crawler.services.quality_service import QualityService
 from dcard_crawler.settings import settings
@@ -28,6 +30,7 @@ class IngestService:
         checkpoint_service: CheckpointService,
         source_repository: SourceRepository | None = None,
         crawl_job_repository: CrawlJobRepository | None = None,
+        dcard_connector: DcardConnector | None = None,
     ):
         self.api_client = api_client
         self.repository = repository
@@ -36,6 +39,7 @@ class IngestService:
         self.checkpoint_service = checkpoint_service
         self.source_repository = source_repository or SourceRepository()
         self.crawl_job_repository = crawl_job_repository or CrawlJobRepository()
+        self.dcard_connector = dcard_connector or DcardConnector(parser=parser)
 
     async def crawl_posts(
         self,
@@ -109,12 +113,17 @@ class IngestService:
                 # Fetch batch of posts
                 logger.info(f"Fetching batch: before_id={before_id} batch_size={batch_size}")
                 try:
-                    posts = await self.api_client.fetch_forum_posts(
-                        forum_alias=forum_alias,
+                    target = ConnectorTarget(
+                        url=f"https://www.dcard.tw/f/{forum_alias}",
+                        label=forum_alias,
+                    )
+                    listing_items = await self.dcard_connector.fetch_listing(
+                        target=target,
                         before=before_id,
                         limit=batch_size,
                         popular=popular,
                     )
+                    posts = [PostListItem(**item.raw) for item in listing_items]
                 except Exception as e:
                     logger.error(f"Failed to fetch post listing: {e}")
                     stats["errors"] += 1
