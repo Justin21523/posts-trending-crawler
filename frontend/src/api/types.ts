@@ -122,6 +122,39 @@ export type DiagnosticsResponse = {
   endpoints: Array<Record<string, unknown>>;
 };
 
+export type PipelinePreview = {
+  preview_id: string;
+  source_label: string;
+  filename: string;
+  created_at: string;
+  row_count: number;
+  normalized_row_count: number;
+  columns: string[];
+  raw_sample: Array<Record<string, unknown>>;
+  normalized_rows: Array<Record<string, unknown>>;
+  quality_flags: Array<{ name: string; count: number }>;
+  keyword_matches: Array<Record<string, unknown>>;
+  topic_matches: Array<Record<string, unknown>>;
+  daily_trend: Array<Record<string, unknown>>;
+  stage_summaries: Array<{
+    id: string;
+    title_zh: string;
+    title_en: string;
+    input_count: number;
+    output_count: number;
+    artifact: string;
+  }>;
+};
+
+export type PipelineImportResponse = {
+  status: string;
+  preview_id: string;
+  source: string;
+  inserted: number;
+  updated: number;
+  row_count: number;
+};
+
 export type KPIOverview = {
   total_sources: number;
   total_posts: number;

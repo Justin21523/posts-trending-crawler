@@ -20,6 +20,8 @@ import type {
   KeywordInsightsAnalytics,
   KeywordNetworkAnalytics,
   LineageAnalytics,
+  PipelineImportResponse,
+  PipelinePreview,
   PlatformAnalytics,
   PostResponse,
   PostsSearchResponse,
@@ -86,11 +88,14 @@ async function resolveApiBaseUrl(): Promise<string> {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const apiBaseUrl = await resolveApiBaseUrl();
+  const headers = init?.body instanceof FormData
+    ? (init.headers ?? {})
+    : {
+        'Content-Type': 'application/json',
+        ...(init?.headers ?? {}),
+      };
   const response = await fetch(`${apiBaseUrl}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
+    headers,
     ...init,
   });
   if (!response.ok) {
@@ -196,5 +201,16 @@ export const api = {
         })}`,
         { method: 'POST' },
       ),
+  },
+  pipeline: {
+    previewSample: () => request<PipelinePreview>('/pipeline/preview', { method: 'POST' }),
+    previewUpload: (file: File) => {
+      const form = new FormData();
+      form.set('file', file);
+      return request<PipelinePreview>('/pipeline/preview', { method: 'POST', body: form });
+    },
+    getPreview: (previewId: string) => request<PipelinePreview>(`/pipeline/preview/${previewId}`),
+    importPreview: (previewId: string) =>
+      request<PipelineImportResponse>(`/pipeline/import/${previewId}`, { method: 'POST' }),
   },
 };

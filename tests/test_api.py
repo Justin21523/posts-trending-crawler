@@ -45,6 +45,26 @@ class FakeControlService:
             "sheets": list(tables),
         }
 
+    def preview_pipeline_sample(self):
+        from dcard_crawler.services.pipeline_preview import PipelinePreviewService
+
+        return PipelinePreviewService().preview_sample()
+
+    def preview_pipeline_upload(self, **kwargs):
+        from dcard_crawler.services.pipeline_preview import PipelinePreviewService
+
+        return PipelinePreviewService().preview_upload(**kwargs)
+
+    def get_pipeline_preview(self, preview_id):
+        from dcard_crawler.services.pipeline_preview import PipelinePreviewService
+
+        return PipelinePreviewService().get_preview(preview_id)
+
+    def import_pipeline_preview(self, preview_id):
+        from dcard_crawler.services.pipeline_preview import PipelinePreviewService
+
+        return PipelinePreviewService().import_preview(preview_id)
+
     async def verify_dcard(self, **kwargs):
         return fake_verify_report("dcard", "dcard")
 
@@ -384,6 +404,45 @@ def test_api_compliance_excel_and_metadata_payloads(tmp_path, monkeypatch):
     assert drilldown.json()["available_fields"]
     assert drilldown.json()["related_posts"]
     assert drilldown.json()["related_jobs"]
+
+
+def test_api_pipeline_preview_upload_and_import(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
+    monkeypatch.chdir(tmp_path)
+    init_db(reset=True)
+    seed_db(tmp_path, monkeypatch)
+    client = TestClient(create_app(control_service=FakeControlService()))
+
+    sample = client.post("/pipeline/preview")
+    assert sample.status_code == 200
+    assert sample.json()["preview_id"]
+    assert sample.json()["stage_summaries"]
+    assert sample.json()["normalized_rows"]
+
+    csv_content = (
+        "source,platform,external_id,board_or_forum,title,content,published_at,"
+        "like_count,comment_count,view_count\n"
+        "upload,news,u-1,Tech,AI demo title,AI Python data analysis content,"
+        "2024-01-02T00:00:00,5,2,100\n"
+    )
+    uploaded = client.post(
+        "/pipeline/preview",
+        files={"file": ("posts.csv", csv_content, "text/csv")},
+    )
+    payload = uploaded.json()
+    fetched = client.get(f"/pipeline/preview/{payload['preview_id']}")
+    imported = client.post(f"/pipeline/import/{payload['preview_id']}")
+    imported_again = client.post(f"/pipeline/import/{payload['preview_id']}")
+
+    assert uploaded.status_code == 200
+    assert payload["source_label"] == "uploaded-data"
+    assert payload["topic_matches"]
+    assert fetched.status_code == 200
+    assert fetched.json()["preview_id"] == payload["preview_id"]
+    assert imported.status_code == 200
+    assert imported.json()["inserted"] == 1
+    assert imported_again.status_code == 200
+    assert imported_again.json()["updated"] == 1
 
 
 def test_api_allows_vite_fallback_dev_ports():

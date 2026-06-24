@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -21,6 +21,8 @@ from dcard_crawler.api.schemas import (
     VerifyResponse,
 )
 from dcard_crawler.api.services import APIControlService, APIQueryService
+
+UPLOAD_FILE_DEFAULT = File(default=None)
 
 
 def create_app(
@@ -218,6 +220,33 @@ def create_app(
     @app.get("/analytics/compliance-summary")
     def analytics_compliance_summary():
         return queries.analytics_compliance_summary()
+
+    @app.post("/pipeline/preview")
+    async def pipeline_preview(file: UploadFile | None = UPLOAD_FILE_DEFAULT):
+        try:
+            if file is None:
+                return controls.preview_pipeline_sample()
+            content = await file.read()
+            return controls.preview_pipeline_upload(
+                filename=file.filename or "upload.csv",
+                content=content,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/pipeline/preview/{preview_id}")
+    def get_pipeline_preview(preview_id: str):
+        try:
+            return controls.get_pipeline_preview(preview_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Preview not found") from exc
+
+    @app.post("/pipeline/import/{preview_id}")
+    def import_pipeline_preview(preview_id: str):
+        try:
+            return controls.import_pipeline_preview(preview_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Preview not found") from exc
 
     @app.post("/reports/excel")
     def generate_excel_report(

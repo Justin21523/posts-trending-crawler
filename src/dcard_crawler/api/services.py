@@ -2616,6 +2616,30 @@ class APIControlService:
 
         return DemoSeedService().seed(rows=rows, reset_demo=reset_demo)
 
+    def preview_pipeline_sample(self) -> dict[str, Any]:
+        """Build a visual pipeline preview from existing sample/SQLite data."""
+        from dcard_crawler.services.pipeline_preview import PipelinePreviewService
+
+        return PipelinePreviewService().preview_sample()
+
+    def preview_pipeline_upload(self, *, filename: str, content: bytes) -> dict[str, Any]:
+        """Build a visual pipeline preview from an uploaded dataset."""
+        from dcard_crawler.services.pipeline_preview import PipelinePreviewService
+
+        return PipelinePreviewService().preview_upload(filename=filename, content=content)
+
+    def get_pipeline_preview(self, preview_id: str) -> dict[str, Any]:
+        """Load a stored visual pipeline preview."""
+        from dcard_crawler.services.pipeline_preview import PipelinePreviewService
+
+        return PipelinePreviewService().get_preview(preview_id)
+
+    def import_pipeline_preview(self, preview_id: str) -> dict[str, Any]:
+        """Import a confirmed preview into SQLite."""
+        from dcard_crawler.services.pipeline_preview import PipelinePreviewService
+
+        return PipelinePreviewService().import_preview(preview_id)
+
     def generate_excel_report(
         self,
         *,

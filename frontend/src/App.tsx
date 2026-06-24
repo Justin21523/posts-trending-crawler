@@ -35,6 +35,7 @@ import {
   ShieldCheck,
   Sparkles,
   TrendingUp,
+  UploadCloud,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
@@ -85,6 +86,8 @@ import type {
   KeywordNetworkAnalytics,
   JourneyStep,
   LineageAnalytics,
+  PipelineImportResponse,
+  PipelinePreview,
   PlatformAnalytics,
   PostResponse,
   PostsSearchResponse,
@@ -115,6 +118,7 @@ type PageKey =
   | 'workflow'
   | 'lifecycle'
   | 'journey'
+  | 'guided'
   | 'runs'
   | 'explorer'
   | 'trends'
@@ -146,6 +150,7 @@ const pages: Array<{ key: PageKey; labelKey: string; icon: typeof Activity }> = 
   { key: 'workflow', labelKey: 'page.workflow', icon: GitBranch },
   { key: 'lifecycle', labelKey: 'page.lifecycle', icon: Route },
   { key: 'journey', labelKey: 'page.journey', icon: Route },
+  { key: 'guided', labelKey: 'page.guided', icon: UploadCloud },
   { key: 'runs', labelKey: 'page.runs', icon: Activity },
   { key: 'explorer', labelKey: 'page.explorer', icon: Search },
   { key: 'trends', labelKey: 'page.trends', icon: TrendingUp },
@@ -169,6 +174,7 @@ const pagePaths: Record<PageKey, string> = {
   workflow: '/workflow',
   lifecycle: '/lifecycle',
   journey: '/journey',
+  guided: '/guided-demo',
   runs: '/runs',
   explorer: '/explorer',
   trends: '/trends',
@@ -192,6 +198,7 @@ const messages: Record<Language, Record<string, string>> = {
     'page.workflow': 'Crawler Workflow',
     'page.lifecycle': '資料生命週期',
     'page.journey': 'Data Journey Studio',
+    'page.guided': '互動 Pipeline 導覽',
     'page.runs': '爬取執行紀錄',
     'page.explorer': '資料瀏覽器',
     'page.trends': '趨勢分析',
@@ -217,6 +224,11 @@ const messages: Record<Language, Record<string, string>> = {
     'assistant.jump': '跳到位置',
     'assistant.evidence': '展示證據',
     'assistant.ability': '工程能力',
+    'guided.upload': '上傳資料或使用 Sample',
+    'guided.sample': '使用 Sample Data',
+    'guided.import': '確認匯入 SQLite',
+    'guided.importing': '匯入中...',
+    'guided.previewing': '建立 Preview...',
     'reports.generate': '產生 Excel 報表',
     'reports.generating': '產生中...',
     'reports.generator': 'Excel 報表產生器',
@@ -241,6 +253,7 @@ const messages: Record<Language, Record<string, string>> = {
     'page.workflow': 'Crawler Workflow',
     'page.lifecycle': 'Data Lifecycle Story',
     'page.journey': 'Data Journey Studio',
+    'page.guided': 'Guided Pipeline Demo',
     'page.runs': 'Crawl Runs',
     'page.explorer': 'Data Explorer',
     'page.trends': 'Trend Analytics',
@@ -266,6 +279,11 @@ const messages: Record<Language, Record<string, string>> = {
     'assistant.jump': 'Jump to section',
     'assistant.evidence': 'Demo evidence',
     'assistant.ability': 'Engineering ability',
+    'guided.upload': 'Upload data or use sample',
+    'guided.sample': 'Use Sample Data',
+    'guided.import': 'Import into SQLite',
+    'guided.importing': 'Importing...',
+    'guided.previewing': 'Building Preview...',
     'reports.generate': 'Generate Excel Report',
     'reports.generating': 'Generating...',
     'reports.generator': 'Excel Report Generator',
@@ -319,6 +337,79 @@ const tourSteps: Array<{
     bullets: {
       zh: ['點流程節點看資料變化', '右側顯示 before/after 與 artifacts'],
       en: ['Click each flow node to inspect changes', 'The side panel shows before/after data and artifacts'],
+    },
+  },
+  {
+    page: 'guided',
+    target: 'guided-upload',
+    i18nKey: 'guidedUpload',
+    effectType: 'data-flow',
+    stageActors: [
+      { kind: 'record', position: 'top-left', label: { zh: 'CSV / Excel', en: 'CSV / Excel' } },
+      { kind: 'parser', position: 'right', label: { zh: '欄位偵測', en: 'Column Mapping' } },
+      { kind: 'analytics', position: 'bottom-right', label: { zh: 'Preview', en: 'Preview' } },
+    ],
+    evidence: [
+      { label: { zh: 'API', en: 'API' }, value: 'POST /pipeline/preview' },
+      { label: { zh: '模式', en: 'Mode' }, value: 'sample or uploaded dataset' },
+    ],
+    title: { zh: '先選擇資料來源', en: 'Choose the dataset' },
+    body: {
+      zh: '使用者可以上傳 CSV/Excel/JSONL；沒有檔案時就用 sample data 跑完整流程。',
+      en: 'Users can upload CSV/Excel/JSONL or use sample data to run the full walkthrough.',
+    },
+    bullets: {
+      zh: ['先 preview，不直接寫入 SQLite', '適合展示資料分析 pipeline 的可重現性'],
+      en: ['Preview first; SQLite import is explicit', 'Good for reproducible analytics demos'],
+    },
+  },
+  {
+    page: 'guided',
+    target: 'guided-stage',
+    i18nKey: 'guidedStage',
+    effectType: 'lineage-trace',
+    stageActors: [
+      { kind: 'record', position: 'top-left', label: { zh: 'Raw Rows', en: 'Raw Rows' } },
+      { kind: 'parser', position: 'left', label: { zh: 'Clean', en: 'Clean' } },
+      { kind: 'database', position: 'right', label: { zh: 'Normalize', en: 'Normalize' } },
+      { kind: 'analytics', position: 'bottom-right', label: { zh: 'Analysis', en: 'Analysis' } },
+    ],
+    evidence: [
+      { label: { zh: '流程', en: 'Flow' }, value: 'clean -> normalize -> validate -> analyze' },
+      { label: { zh: '輸出', en: 'Output' }, value: 'stage summaries / quality flags' },
+    ],
+    title: { zh: '觀看資料逐步轉換', en: 'Watch data transform step by step' },
+    body: {
+      zh: '這裡用動畫展示資料如何從原始欄位變成標準 schema、品質旗標與分析訊號。',
+      en: 'This stage visualizes raw fields becoming normalized schema, quality flags, and signals.',
+    },
+    bullets: {
+      zh: ['點擊任一步看 input/output', '資料封包會沿 pipeline 移動'],
+      en: ['Click any stage to inspect input/output', 'Data packets move through the pipeline'],
+    },
+  },
+  {
+    page: 'guided',
+    target: 'guided-results',
+    i18nKey: 'guidedResults',
+    effectType: 'graph-focus',
+    stageActors: [
+      { kind: 'analytics', position: 'top-left', label: { zh: 'Keywords', en: 'Keywords' } },
+      { kind: 'analytics', position: 'right', label: { zh: 'Topics', en: 'Topics' } },
+      { kind: 'export', position: 'bottom-right', label: { zh: 'Import / Export', en: 'Import / Export' } },
+    ],
+    evidence: [
+      { label: { zh: '結果', en: 'Results' }, value: 'keywords / topics / quality / trend' },
+      { label: { zh: '下一步', en: 'Next' }, value: 'POST /pipeline/import/{preview_id}' },
+    ],
+    title: { zh: '確認分析結果與匯入', en: 'Review analysis and import' },
+    body: {
+      zh: '最後檢查資料品質、topic 命中與趨勢摘要，確認後才匯入 SQLite。',
+      en: 'Review quality, topics, and trends before confirming SQLite import.',
+    },
+    bullets: {
+      zh: ['避免錯誤檔案污染資料庫', '匯入後會進入既有圖表與 Data Explorer'],
+      en: ['Avoid polluting the database', 'Imported rows appear in the existing analytics UI'],
     },
   },
   {
@@ -503,6 +594,9 @@ export function App() {
   const [demoRunning, setDemoRunning] = useState(false);
   const [reportRunning, setReportRunning] = useState(false);
   const [lastReportRun, setLastReportRun] = useState<ExcelReportRunResponse | null>(null);
+  const [pipelinePreview, setPipelinePreview] = useState<PipelinePreview | null>(null);
+  const [pipelineImport, setPipelineImport] = useState<PipelineImportResponse | null>(null);
+  const [pipelineRunning, setPipelineRunning] = useState(false);
   const [endpointStatus, setEndpointStatus] = useState<Record<string, string>>({});
   const [insight, setInsight] = useState<DrilldownResponse | null>(null);
   const [insightLoading, setInsightLoading] = useState(false);
@@ -701,6 +795,51 @@ export function App() {
     }
   }
 
+  async function runPipelineSamplePreview() {
+    setPipelineRunning(true);
+    setStatus('Building sample pipeline preview...');
+    try {
+      const result = await api.pipeline.previewSample();
+      setPipelinePreview(result);
+      setPipelineImport(null);
+      setStatus(`Pipeline preview ready: ${result.normalized_row_count} rows`);
+    } catch (error) {
+      setStatus((error as Error).message);
+    } finally {
+      setPipelineRunning(false);
+    }
+  }
+
+  async function runPipelineUploadPreview(file: File) {
+    setPipelineRunning(true);
+    setStatus(`Building upload preview: ${file.name}`);
+    try {
+      const result = await api.pipeline.previewUpload(file);
+      setPipelinePreview(result);
+      setPipelineImport(null);
+      setStatus(`Upload preview ready: ${result.normalized_row_count} rows`);
+    } catch (error) {
+      setStatus((error as Error).message);
+    } finally {
+      setPipelineRunning(false);
+    }
+  }
+
+  async function importPipelinePreview() {
+    if (!pipelinePreview) return;
+    setPipelineRunning(true);
+    setStatus('Importing preview into SQLite...');
+    try {
+      const result = await refreshAfterRun(api.pipeline.importPreview(pipelinePreview.preview_id));
+      setPipelineImport(result);
+      setStatus(`Imported ${result.inserted} rows, updated ${result.updated} rows`);
+    } catch (error) {
+      setStatus((error as Error).message);
+    } finally {
+      setPipelineRunning(false);
+    }
+  }
+
   return (
     <main className="workbench-shell">
       <aside className="sidebar">
@@ -891,6 +1030,17 @@ export function App() {
           <DataJourneyPage
             journey={dataJourney}
             onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+          />
+        );
+      case 'guided':
+        return (
+          <GuidedPipelineDemoPage
+            preview={pipelinePreview}
+            importResult={pipelineImport}
+            running={pipelineRunning}
+            onUseSample={() => void runPipelineSamplePreview()}
+            onUpload={(file) => void runPipelineUploadPreview(file)}
+            onImport={() => void importPipelinePreview()}
           />
         );
       case 'runs':
@@ -1788,6 +1938,195 @@ function DataJourneyPage({
         </div>
       </div>
     </section>
+  );
+}
+
+function GuidedPipelineDemoPage({
+  preview,
+  importResult,
+  running,
+  onUseSample,
+  onUpload,
+  onImport,
+}: {
+  preview: PipelinePreview | null;
+  importResult: PipelineImportResponse | null;
+  running: boolean;
+  onUseSample: () => void;
+  onUpload: (file: File) => void;
+  onImport: () => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const [selectedStageId, setSelectedStageId] = useState<string>('upload');
+  const selectedStage = preview?.stage_summaries.find((stage) => stage.id === selectedStageId)
+    ?? preview?.stage_summaries[0]
+    ?? null;
+  const labels = i18n.language === 'en'
+    ? {
+        eyebrow: 'Guided Pipeline Lab',
+        title: 'Upload data and watch it become analytics',
+        subtitle: 'Preview first, then import into SQLite only after confirmation.',
+        raw: 'Raw sample',
+        normalized: 'Normalized output',
+        quality: 'Quality flags',
+        keywords: 'Keyword matches',
+        topics: 'Topic signals',
+        trend: 'Daily trend',
+        empty: 'Run sample data or upload a CSV/Excel/JSONL file to start.',
+      }
+    : {
+        eyebrow: '互動式 Pipeline 導覽實驗室',
+        title: '上傳資料，觀看它如何變成分析成果',
+        subtitle: '先 preview，不直接寫入 SQLite；確認後才匯入，適合面試展示資料工程流程。',
+        raw: '原始資料樣本',
+        normalized: '標準化輸出',
+        quality: '資料品質旗標',
+        keywords: 'Keyword 命中',
+        topics: 'Topic 訊號',
+        trend: '每日趨勢',
+        empty: '使用 sample data 或上傳 CSV/Excel/JSONL 後開始。',
+      };
+  return (
+    <section className="guided-pipeline-page">
+      <div className="panel wide-panel guided-hero">
+        <div>
+          <p className="eyebrow">{labels.eyebrow}</p>
+          <h2>{labels.title}</h2>
+          <p>{labels.subtitle}</p>
+        </div>
+        <button className="primary-action large-action" type="button" onClick={onUseSample} disabled={running}>
+          <Sparkles size={18} />
+          {running ? t('guided.previewing') : t('guided.sample')}
+        </button>
+      </div>
+
+      <div className="panel wide-panel guided-upload-panel" data-tour="guided-upload">
+        <label className="guided-upload-zone">
+          <UploadCloud size={34} />
+          <strong>{t('guided.upload')}</strong>
+          <span>CSV / JSONL / XLSX</span>
+          <input
+            type="file"
+            accept=".csv,.jsonl,.ndjson,.xlsx,.xls"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onUpload(file);
+              event.currentTarget.value = '';
+            }}
+          />
+        </label>
+        <div className="guided-upload-meta">
+          <span>{preview?.filename ?? 'sample or uploaded dataset'}</span>
+          <strong>{preview ? `${preview.normalized_row_count} normalized rows` : labels.empty}</strong>
+          <small>{preview ? preview.columns.join(' / ') : 'title / content / platform / metrics / date'}</small>
+        </div>
+      </div>
+
+      <div className="panel wide-panel guided-stage-panel" data-tour="guided-stage">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Visual Processing Stage</p>
+            <h2>{i18n.language === 'en' ? 'Follow the data through each stage' : '跟著資料逐步通過每個處理階段'}</h2>
+          </div>
+          <span className="pill">{selectedStage?.artifact ?? 'waiting for preview'}</span>
+        </div>
+        <div className="guided-stage-lane">
+          {(preview?.stage_summaries ?? []).map((stage, index) => (
+            <button
+              className={stage.id === selectedStage?.id ? 'guided-stage-card active' : 'guided-stage-card'}
+              type="button"
+              key={stage.id}
+              onClick={() => setSelectedStageId(stage.id)}
+            >
+              <span>{index + 1}</span>
+              <strong>{i18n.language === 'en' ? stage.title_en : stage.title_zh}</strong>
+              <small>{stage.input_count} in / {stage.output_count} out</small>
+              <i />
+            </button>
+          ))}
+          {!preview && (
+            <div className="empty-state">{labels.empty}</div>
+          )}
+        </div>
+        <div className="guided-theater">
+          <span className="guided-orbit-chip raw">Raw Rows</span>
+          <span className="guided-orbit-chip clean">Clean</span>
+          <span className="guided-orbit-chip schema">Schema</span>
+          <span className="guided-orbit-chip topic">Topics</span>
+          <span className="guided-orbit-chip excel">Excel</span>
+          <div className="guided-data-core">
+            <strong>{selectedStage ? (i18n.language === 'en' ? selectedStage.title_en : selectedStage.title_zh) : 'Pipeline'}</strong>
+            <small>{selectedStage?.artifact ?? 'Preview data first'}</small>
+          </div>
+        </div>
+      </div>
+
+      <div className="guided-results-grid" data-tour="guided-results">
+        <GuidedPreviewPanel title={labels.raw} rows={preview?.raw_sample ?? []} />
+        <GuidedPreviewPanel title={labels.normalized} rows={(preview?.normalized_rows ?? []).slice(0, 5)} />
+        <GuidedMetricPanel title={labels.quality} rows={preview?.quality_flags ?? []} labelKey="name" valueKey="count" />
+        <GuidedMetricPanel title={labels.keywords} rows={preview?.keyword_matches ?? []} labelKey="keyword" valueKey="match_count" />
+        <GuidedMetricPanel title={labels.topics} rows={preview?.topic_matches ?? []} labelKey="keyword" valueKey="match_count" />
+        <GuidedMetricPanel title={labels.trend} rows={preview?.daily_trend ?? []} labelKey="date" valueKey="count" />
+      </div>
+
+      <div className="panel wide-panel guided-import-panel">
+        <div>
+          <p className="eyebrow">SQLite Import Gate</p>
+          <h2>{i18n.language === 'en' ? 'Confirm before writing data' : '確認後才寫入資料庫'}</h2>
+          <p>{importResult ? `${importResult.source}: inserted ${importResult.inserted}, updated ${importResult.updated}` : 'Preview 不會污染資料庫；按下確認後才寫入 SQLite。'}</p>
+        </div>
+        <button className="primary-action large-action" type="button" onClick={onImport} disabled={!preview || running}>
+          <Database size={18} />
+          {running ? t('guided.importing') : t('guided.import')}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function GuidedPreviewPanel({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: Array<Record<string, unknown>>;
+}) {
+  return (
+    <div className="panel guided-result-panel">
+      <div className="panel-header"><h2>{title}</h2><span className="pill">{rows.length}</span></div>
+      <pre className="json-panel">{JSON.stringify(rows.slice(0, 5), null, 2)}</pre>
+    </div>
+  );
+}
+
+function GuidedMetricPanel({
+  title,
+  rows,
+  labelKey,
+  valueKey,
+}: {
+  title: string;
+  rows: Array<Record<string, unknown>>;
+  labelKey: string;
+  valueKey: string;
+}) {
+  return (
+    <div className="panel guided-result-panel">
+      <div className="panel-header"><h2>{title}</h2><span className="pill">{rows.length}</span></div>
+      <div className="guided-bars">
+        {rows.slice(0, 8).map((row, index) => {
+          const value = Number(row[valueKey] ?? row.count ?? 0);
+          return (
+            <div className="guided-bar-row" key={`${String(row[labelKey] ?? index)}-${index}`}>
+              <span>{String(row[labelKey] ?? row.topic_name ?? row.platform ?? '-')}</span>
+              <i style={{ width: `${Math.min(Math.max(value * 8, 8), 100)}%` }} />
+              <strong>{value}</strong>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
