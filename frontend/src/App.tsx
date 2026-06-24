@@ -552,6 +552,8 @@ const tourSteps: Array<{
   },
 ];
 
+const AUTO_JOURNEY_STORAGE_KEY = 'twCrawlerPipelineJourneyAutoStarted';
+
 export function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -603,6 +605,7 @@ export function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const [status, setStatus] = useState('Connecting to backend...');
+  const autoJourneyStartedRef = useRef(false);
   const language = i18n.language === 'en' ? 'en' : 'zh';
 
   function changeLanguage(next: Language) {
@@ -745,6 +748,32 @@ export function App() {
       setActivePage(routePage);
     }
   }, [routePage]);
+
+  useEffect(() => {
+    if (autoJourneyStartedRef.current) return;
+    if (localStorage.getItem(AUTO_JOURNEY_STORAGE_KEY) === '1') return;
+
+    autoJourneyStartedRef.current = true;
+    localStorage.setItem(AUTO_JOURNEY_STORAGE_KEY, '1');
+    setInsight(null);
+    setDemoMode(true);
+    setTourStep(0);
+    setAssistantOpen(true);
+    setActivePage(tourSteps[0].page);
+    setStatus('首次進站，自動啟動 Pipeline Journey 導覽');
+    navigate(pagePaths[tourSteps[0].page], { replace: true });
+
+    window.setTimeout(() => {
+      document.querySelector(`[data-tour="${tourSteps[0].target}"]`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }, 450);
+
+    window.setTimeout(() => {
+      void runPipelineSamplePreview();
+    }, 800);
+  }, [navigate]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
