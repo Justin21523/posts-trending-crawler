@@ -53,6 +53,26 @@ class CrawlJobRepository:
             error_reason=error_reason,
         )
 
+    def warn(
+        self,
+        job_id: int,
+        warning_message: str,
+        request_count: int = 0,
+        item_count: int = 0,
+        error_category: str = "data_quality_warning",
+        error_reason: str | None = None,
+    ) -> None:
+        """Mark a crawl job as completed with warnings."""
+        self._complete(
+            job_id=job_id,
+            status="completed_with_warnings",
+            error_message=warning_message,
+            request_count=request_count,
+            item_count=item_count,
+            error_category=error_category,
+            error_reason=error_reason or warning_message,
+        )
+
     def get_by_id(self, job_id: int) -> CrawlJob | None:
         """Return a crawl job by ID."""
         with get_session() as session:

@@ -47,6 +47,9 @@ dcard-crawler analyze-excel \
   --input data/exports/posts.jsonl \
   --keywords configs/keywords.txt \
   --output data/exports/analysis_report.xlsx
+
+# 7. Run a small live crawler verification
+dcard-crawler verify-live-dcard --forum trending --max-posts 5
 ```
 
 ## CLI Commands
@@ -139,6 +142,30 @@ dcard-crawler analyze-source-comparison \
     --input data/exports/posts.csv \
     --output data/exports/source_comparison.csv
 ```
+
+### Live Verification
+Run low-volume live smoke checks for crawler health. These commands write normal
+`crawl_jobs` records plus a JSON report under `data/reports/crawl_runs/`.
+
+```bash
+dcard-crawler verify-live-dcard \
+    --forum trending \
+    --max-posts 5
+
+dcard-crawler verify-live-ptt \
+    --board Stock \
+    --max-pages 1 \
+    --max-posts 5
+
+dcard-crawler verify-live-news-rss \
+    --source-name cna-technology \
+    --feed-url https://feeds.feedburner.com/rsscna/technology \
+    --max-articles 5
+```
+
+Live verification is intentionally small and fail-closed. If a site returns
+robots disallow, 403, 429, CAPTCHA, Cloudflare challenge, or login wall, the
+run stops and records the reason instead of bypassing the control.
 
 ## Architecture
 
@@ -240,6 +267,7 @@ ruff check src/ tests/
 - **No proxy rotation or IP reputation evasion**
 - **No scraping of robots.txt-disallowed paths**
 - Built-in rate limiting to be respectful
+- Live verification commands default to small request budgets and report data quality
 - When a site returns 403, 429, CAPTCHA, Cloudflare challenge, login wall, or robots disallow,
   the crawler must stop, fail closed, or slow down. It must not attempt to bypass the block.
 

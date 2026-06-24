@@ -615,6 +615,164 @@ def crawl_news_article(
     )
 
 
+def _print_verify_report(report: dict) -> None:
+    """Print a concise verification summary."""
+    stats = report["stats"]
+    quality = report["quality"]
+    typer.echo("\n✓ Live verification finished")
+    typer.echo(f"  Platform: {report['platform']}")
+    typer.echo(f"  Job ID: {report['job_id']}")
+    typer.echo(f"  Status: {stats.get('status')}")
+    typer.echo(f"  Requests: {stats.get('request_count', 0)}")
+    typer.echo(f"  Stored: {stats.get('posts_stored', stats.get('items_stored', 0))}")
+    typer.echo(f"  Skipped: {stats.get('posts_skipped', stats.get('items_skipped', 0))}")
+    typer.echo(f"  Errors: {stats.get('errors', 0)}")
+    typer.echo(f"  Quality: {quality['status']}")
+    if quality.get("issues"):
+        typer.echo(f"  Quality issues: {'; '.join(quality['issues'])}")
+    if report.get("samples"):
+        typer.echo("  Samples:")
+        for sample in report["samples"][:3]:
+            typer.echo(f"    - {sample['title']}")
+    typer.echo(f"  Report: {report['report_path']}")
+
+
+@app.command("verify-live-dcard")
+def verify_live_dcard(
+    forum: str = typer.Option("trending", "--forum", "-f", help="Dcard forum alias"),
+    mode: str = typer.Option(
+        "latest",
+        "--mode",
+        help="Crawl mode: latest or popular",
+    ),
+    max_posts: int = typer.Option(
+        5,
+        "--max-posts",
+        "-m",
+        min=1,
+        max=10,
+        help="Maximum posts for live verification",
+    ),
+):
+    """Run a low-volume live Dcard crawl verification."""
+    from dcard_crawler.services.live_verification import LiveVerificationService
+
+    if not _require_current_schema():
+        raise typer.Exit(1)
+
+    async def _run():
+        verifier = LiveVerificationService()
+        report = await verifier.verify_dcard(
+            build_ingest_service(),
+            forum=forum,
+            max_posts=max_posts,
+            popular=_popular_from_mode(mode),
+        )
+        _print_verify_report(report)
+
+    asyncio.run(_run())
+
+
+@app.command("verify-live-ptt")
+def verify_live_ptt(
+    board: str = typer.Option("Stock", "--board", "-b", help="PTT board name"),
+    max_pages: int = typer.Option(
+        1,
+        "--max-pages",
+        min=1,
+        max=2,
+        help="Maximum listing pages for live verification",
+    ),
+    max_posts: int = typer.Option(
+        5,
+        "--max-posts",
+        "-m",
+        min=1,
+        max=10,
+        help="Maximum posts for live verification",
+    ),
+    allow_over18_public_confirm: bool = typer.Option(
+        False,
+        "--allow-over18-public-confirm",
+        help="Use PTT public over18 confirmation flow for this session only",
+    ),
+):
+    """Run a low-volume live PTT crawl verification."""
+    from dcard_crawler.services.live_verification import LiveVerificationService
+
+    if not _require_current_schema():
+        raise typer.Exit(1)
+
+    async def _run():
+        service = build_ptt_ingest_service(
+            board=board,
+            allow_over18_public_confirm=allow_over18_public_confirm,
+        )
+        verifier = LiveVerificationService()
+        report = await verifier.verify_connector(
+            service,
+            platform="ptt",
+            source_name="ptt",
+            target=service.connector.board_target(board),
+            max_pages=max_pages,
+            max_posts=max_posts,
+            source_base_url="https://www.ptt.cc",
+            robots_url="https://www.ptt.cc/robots.txt",
+        )
+        _print_verify_report(report)
+
+    asyncio.run(_run())
+
+
+@app.command("verify-live-news-rss")
+def verify_live_news_rss(
+    source_name: str = typer.Option(
+        "cna-technology",
+        "--source-name",
+        help="News source name",
+    ),
+    feed_url: str = typer.Option(
+        "https://feeds.feedburner.com/rsscna/technology",
+        "--feed-url",
+        help="RSS or Atom feed URL",
+    ),
+    max_articles: int = typer.Option(
+        5,
+        "--max-articles",
+        min=1,
+        max=10,
+        help="Maximum articles for live verification",
+    ),
+):
+    """Run a low-volume live News RSS crawl verification."""
+    from dcard_crawler.services.live_verification import LiveVerificationService
+
+    if not _require_current_schema():
+        raise typer.Exit(1)
+
+    async def _run():
+        service = build_news_ingest_service(source_name=source_name)
+        target = ConnectorTarget(
+            url=feed_url,
+            label=source_name,
+            metadata={"target_type": "rss"},
+        )
+        verifier = LiveVerificationService()
+        report = await verifier.verify_connector(
+            service,
+            platform="news",
+            source_name=source_name,
+            target=target,
+            max_pages=1,
+            max_posts=max_articles,
+            max_articles=max_articles,
+            source_base_url=feed_url,
+        )
+        _print_verify_report(report)
+
+    asyncio.run(_run())
+
+
 @app.command()
 def status(
     forum: str = typer.Option(
@@ -673,10 +831,11 @@ def status(
             for job, source_name in jobs:
                 finished = job.finished_at.isoformat() if job.finished_at else "-"
                 error = f" error={job.error_category}" if job.error_category else ""
+                reason = f" reason={job.error_reason}" if job.error_reason else ""
                 typer.echo(
                     f"    #{job.id} {source_name} {job.status} "
                     f"requests={job.request_count} items={job.item_count} "
-                    f"finished={finished}{error}"
+                    f"finished={finished}{error}{reason}"
                 )
 
     # Checkpoint status

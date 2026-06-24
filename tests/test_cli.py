@@ -58,6 +58,35 @@ class FakeNewsIngestService(FakeIngestService):
     connector = None
 
 
+class FakeLiveVerificationService:
+    async def verify_dcard(self, service, **kwargs):
+        return fake_verify_report("dcard")
+
+    async def verify_connector(self, service, **kwargs):
+        return fake_verify_report(kwargs["platform"])
+
+
+def fake_verify_report(platform):
+    return {
+        "platform": platform,
+        "source": platform,
+        "target": "target",
+        "job_id": 1,
+        "stats": {
+            "status": "completed",
+            "request_count": 2,
+            "posts_stored": 1,
+            "posts_skipped": 0,
+            "items_stored": 1,
+            "items_skipped": 0,
+            "errors": 0,
+        },
+        "quality": {"status": "passed", "issues": []},
+        "samples": [{"title": "Sample title", "url": "https://example.com/a"}],
+        "report_path": "data/reports/crawl_runs/fake.json",
+    }
+
+
 def test_init_reset_creates_current_schema(tmp_path, monkeypatch):
     """CLI init --reset should create the current multi-platform schema."""
     monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
@@ -218,6 +247,43 @@ def test_news_help_commands_run():
     assert runner.invoke(app, ["crawl-news-article", "--help"]).exit_code == 0
 
 
+def test_verify_live_help_commands_run():
+    runner = CliRunner()
+
+    assert runner.invoke(app, ["verify-live-dcard", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["verify-live-ptt", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["verify-live-news-rss", "--help"]).exit_code == 0
+
+
+def test_verify_live_commands_use_verifier_without_live_network(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
+    init_db(reset=True)
+    monkeypatch.setattr("dcard_crawler.cli.build_ingest_service", lambda: FakeIngestService())
+    monkeypatch.setattr(
+        "dcard_crawler.cli.build_ptt_ingest_service",
+        lambda **kwargs: FakePttIngestService(),
+    )
+    monkeypatch.setattr(
+        "dcard_crawler.cli.build_news_ingest_service",
+        lambda **kwargs: FakeNewsIngestService(),
+    )
+    monkeypatch.setattr(
+        "dcard_crawler.services.live_verification.LiveVerificationService",
+        FakeLiveVerificationService,
+    )
+
+    runner = CliRunner()
+    dcard_result = runner.invoke(app, ["verify-live-dcard", "--max-posts", "1"])
+    ptt_result = runner.invoke(app, ["verify-live-ptt", "--max-posts", "1"])
+    news_result = runner.invoke(app, ["verify-live-news-rss", "--max-articles", "1"])
+
+    assert dcard_result.exit_code == 0
+    assert ptt_result.exit_code == 0
+    assert news_result.exit_code == 0
+    assert "Live verification finished" in dcard_result.output
+    assert "Quality: passed" in news_result.output
+
+
 def test_status_shows_recent_crawl_jobs(tmp_path, monkeypatch):
     monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
     init_db(reset=True)
@@ -238,6 +304,7 @@ def test_status_shows_recent_crawl_jobs(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert "Recent crawl jobs" in result.output
     assert "robots_disallowed" in result.output
+    assert "robots.txt disallows URL" in result.output
 
 
 def test_export_outputs_consistent_jsonl_and_csv_fields(tmp_path, monkeypatch):

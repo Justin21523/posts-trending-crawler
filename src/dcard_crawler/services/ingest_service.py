@@ -265,6 +265,7 @@ class IngestService:
                 self.checkpoint_service.save(final_checkpoint)
 
             request_count = self._connector_request_count(self.dcard_connector)
+            stats["request_count"] = request_count
             if fatal_error or stats["errors"]:
                 error_category = stats["error_category"] or self._error_category(fatal_error)
                 error_reason = stats["error_reason"] or str(fatal_error or "completed_with_errors")

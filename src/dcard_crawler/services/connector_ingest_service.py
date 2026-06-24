@@ -41,8 +41,9 @@ class ConnectorIngestService:
         **listing_kwargs,
     ) -> dict:
         """Crawl a generic connector target."""
+        source_name = getattr(self.connector, "source_name", self.connector.name)
         source_id = self.source_repository.get_or_create(
-            name=self.connector.name,
+            name=source_name,
             source_type=self.connector.source_type,
             base_url=source_base_url,
             robots_url=robots_url,
@@ -54,7 +55,7 @@ class ConnectorIngestService:
         )
         stats = {
             "job_id": job_id,
-            "source": self.connector.name,
+            "source": source_name,
             "target": target.label,
             "items_listed": 0,
             "items_stored": 0,
@@ -122,6 +123,7 @@ class ConnectorIngestService:
         finally:
             stats["completed_at"] = datetime.now().isoformat()
             request_count = int(getattr(self.connector, "request_count", 0))
+            stats["request_count"] = request_count
             if fatal_error or stats["errors"]:
                 error_category = stats["error_category"] or self._error_category(fatal_error)
                 error_reason = stats["error_reason"] or str(fatal_error or "completed_with_errors")
