@@ -30,6 +30,11 @@ class CrawlerHttpClient:
         self.policy = policy or CrawlPolicy()
         self._client: httpx.AsyncClient | None = None
 
+    @property
+    def request_count(self) -> int:
+        """Return total requests admitted by the rate limiter."""
+        return self.rate_limiter.total_request_count
+
     @staticmethod
     def default_headers() -> dict[str, str]:
         """Return a transparent research user-agent."""

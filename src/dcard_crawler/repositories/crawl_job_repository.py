@@ -39,6 +39,8 @@ class CrawlJobRepository:
         error_message: str,
         request_count: int = 0,
         item_count: int = 0,
+        error_category: str | None = None,
+        error_reason: str | None = None,
     ) -> None:
         """Mark a crawl job as failed."""
         self._complete(
@@ -47,7 +49,16 @@ class CrawlJobRepository:
             error_message=error_message,
             request_count=request_count,
             item_count=item_count,
+            error_category=error_category,
+            error_reason=error_reason,
         )
+
+    def get_by_id(self, job_id: int) -> CrawlJob | None:
+        """Return a crawl job by ID."""
+        with get_session() as session:
+            return session.execute(
+                select(CrawlJob).where(CrawlJob.id == job_id)
+            ).scalar_one_or_none()
 
     def _complete(
         self,
@@ -56,6 +67,8 @@ class CrawlJobRepository:
         request_count: int = 0,
         item_count: int = 0,
         error_message: str | None = None,
+        error_category: str | None = None,
+        error_reason: str | None = None,
     ) -> None:
         with get_session() as session:
             job = session.execute(select(CrawlJob).where(CrawlJob.id == job_id)).scalar_one()
@@ -64,3 +77,5 @@ class CrawlJobRepository:
             job.request_count = request_count
             job.item_count = item_count
             job.error_message = error_message
+            job.error_category = error_category
+            job.error_reason = error_reason

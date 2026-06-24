@@ -63,7 +63,11 @@ def is_current_schema() -> bool:
         return False
 
     post_columns = get_table_columns("posts")
-    return {"source_id", "external_id", "platform"}.issubset(post_columns)
+    crawl_job_columns = get_table_columns("crawl_jobs")
+    return {"source_id", "external_id", "platform"}.issubset(post_columns) and {
+        "error_category",
+        "error_reason",
+    }.issubset(crawl_job_columns)
 
 
 def drop_all_tables():

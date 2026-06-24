@@ -65,6 +65,11 @@ class DomainRateLimiter:
         """Return request count for a URL's domain."""
         return self._states[self.domain_for_url(url)].request_count
 
+    @property
+    def total_request_count(self) -> int:
+        """Return total request count across all tracked domains."""
+        return sum(state.request_count for state in self._states.values())
+
     @staticmethod
     def domain_for_url(url: str) -> str:
         """Extract normalized domain from a URL."""

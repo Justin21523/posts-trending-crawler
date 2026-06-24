@@ -3,6 +3,7 @@
 from urllib.parse import urlparse
 
 from dcard_crawler.connectors.base import BaseConnector, ConnectorItem, ConnectorTarget
+from dcard_crawler.core.errors import CrawlerError
 from dcard_crawler.core.http_client import CrawlerHttpClient
 from dcard_crawler.parsers.post_parser import PostParser
 from dcard_crawler.schemas import NormalizedPost, PostDetail, PostListItem
@@ -24,6 +25,11 @@ class DcardConnector(BaseConnector):
         self.http_client = http_client or CrawlerHttpClient(base_url=settings.dcard_api_base_url)
         self.parser = parser or PostParser()
         self._forum_alias_by_id: dict[str, str] = {}
+
+    @property
+    def request_count(self) -> int:
+        """Return connector request count when supported by the HTTP client."""
+        return int(getattr(self.http_client, "request_count", 0))
 
     def can_handle(self, url: str) -> bool:
         """Return whether this connector handles the URL."""
@@ -60,7 +66,12 @@ class DcardConnector(BaseConnector):
 
     async def fetch_detail(self, item: ConnectorItem) -> ConnectorItem | None:
         """Fetch Dcard post detail for an item."""
-        data = await self.http_client.get_json(f"/posts/{item.external_id}")
+        try:
+            data = await self.http_client.get_json(f"/posts/{item.external_id}")
+        except CrawlerError as exc:
+            if exc.status_code == 404:
+                return None
+            raise
         return ConnectorItem(
             external_id=item.external_id,
             raw=data,

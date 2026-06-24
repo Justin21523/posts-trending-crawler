@@ -20,3 +20,6 @@ def test_init_db_creates_multiplatform_tables(tmp_path, monkeypatch):
 
     post_columns = {column["name"] for column in inspector.get_columns("posts")}
     assert {"source_id", "external_id", "platform", "content_hash"}.issubset(post_columns)
+
+    crawl_job_columns = {column["name"] for column in inspector.get_columns("crawl_jobs")}
+    assert {"error_category", "error_reason"}.issubset(crawl_job_columns)

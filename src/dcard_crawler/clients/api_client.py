@@ -3,6 +3,7 @@
 import httpx
 from loguru import logger
 
+from dcard_crawler.core.errors import CrawlerError, PolicyBlockedError
 from dcard_crawler.core.http_client import CrawlerHttpClient
 from dcard_crawler.schemas import PostDetail, PostListItem
 from dcard_crawler.settings import settings
@@ -24,6 +25,11 @@ class DcardAPIClient:
             "Referer": "https://www.dcard.tw/",
         }
         self._client = CrawlerHttpClient(base_url=self.base_url, headers=self.headers)
+
+    @property
+    def request_count(self) -> int:
+        """Return total requests made by the compatibility client."""
+        return self._client.request_count
 
     async def close(self) -> None:
         await self._client.close()
@@ -92,6 +98,13 @@ class DcardAPIClient:
             data = response.json()
             post = PostDetail(**data)
             return post
+        except PolicyBlockedError:
+            raise
+        except CrawlerError as e:
+            if e.status_code == 404:
+                logger.warning(f"Post {post_id} not found")
+                return None
+            raise
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 logger.warning(f"Post {post_id} not found")
@@ -128,6 +141,8 @@ class DcardAPIClient:
         post_details = {}
         for result in results:
             if isinstance(result, Exception):
+                if isinstance(result, PolicyBlockedError):
+                    raise result
                 logger.error(f"Task failed: {result}")
                 continue
             pid, detail = result

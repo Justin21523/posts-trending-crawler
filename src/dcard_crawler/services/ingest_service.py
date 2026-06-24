@@ -6,8 +6,10 @@ from datetime import datetime
 from loguru import logger
 
 from dcard_crawler.clients.api_client import DcardAPIClient
-from dcard_crawler.connectors.base import ConnectorTarget
+from dcard_crawler.connectors.base import BaseConnector, ConnectorItem, ConnectorTarget
 from dcard_crawler.connectors.dcard import DcardConnector
+from dcard_crawler.connectors.registry import ConnectorRegistry, default_registry
+from dcard_crawler.core.errors import CrawlerError, ErrorCategory, PolicyBlockedError
 from dcard_crawler.parsers.post_parser import PostParser
 from dcard_crawler.repositories.crawl_job_repository import CrawlJobRepository
 from dcard_crawler.repositories.post_repository import PostRepository
@@ -31,6 +33,7 @@ class IngestService:
         source_repository: SourceRepository | None = None,
         crawl_job_repository: CrawlJobRepository | None = None,
         dcard_connector: DcardConnector | None = None,
+        connector_registry: ConnectorRegistry | None = None,
     ):
         self.api_client = api_client
         self.repository = repository
@@ -39,7 +42,10 @@ class IngestService:
         self.checkpoint_service = checkpoint_service
         self.source_repository = source_repository or SourceRepository()
         self.crawl_job_repository = crawl_job_repository or CrawlJobRepository()
-        self.dcard_connector = dcard_connector or DcardConnector(parser=parser)
+        self.connector_registry = connector_registry or default_registry()
+        if dcard_connector is not None:
+            self.connector_registry.register(dcard_connector)
+        self.dcard_connector = self.connector_registry.get("dcard")
 
     async def crawl_posts(
         self,
@@ -95,8 +101,13 @@ class IngestService:
             "errors": 0,
             "started_at": datetime.now().isoformat(),
             "completed_at": None,
+            "job_id": job_id,
+            "status": "running",
+            "error_category": None,
+            "error_reason": None,
         }
 
+        fatal_error: Exception | None = None
         try:
             while True:
                 # Check if we've reached the limit
@@ -124,9 +135,12 @@ class IngestService:
                         popular=popular,
                     )
                     posts = [PostListItem(**item.raw) for item in listing_items]
+                except PolicyBlockedError:
+                    raise
                 except Exception as e:
                     logger.error(f"Failed to fetch post listing: {e}")
                     stats["errors"] += 1
+                    fatal_error = e
                     break
 
                 if not posts:
@@ -137,8 +151,8 @@ class IngestService:
                 stats["posts_listed"] += len(posts)
 
                 # Process each post
-                post_ids_for_detail = []
-                for post_item in posts:
+                items_for_detail: list[ConnectorItem] = []
+                for item, post_item in zip(listing_items, posts, strict=False):
                     try:
                         # Skip if already exists
                         if self.repository.exists(post_item.id, source_id=source_id):
@@ -148,7 +162,7 @@ class IngestService:
                             continue
 
                         # Normalize and validate
-                        normalized = self.parser.normalize_list_item(post_item, forum_alias)
+                        normalized = self.dcard_connector.normalize_item(item)
                         normalized.source_id = source_id
                         is_valid, issues = self.quality_service.validate(normalized)
 
@@ -163,7 +177,7 @@ class IngestService:
                             logger.error(f"Failed to store post {post_item.id}: {e}")
                             stats["errors"] += 1
 
-                        post_ids_for_detail.append(post_item.id)
+                        items_for_detail.append(item)
                         total_fetched += 1
 
                         # Update before_id for next page
@@ -174,43 +188,32 @@ class IngestService:
                         stats["errors"] += 1
 
                 # Fetch details if requested
-                if fetch_details and post_ids_for_detail:
-                    logger.info(f"Fetching details for {len(post_ids_for_detail)} posts")
-                    try:
-                        details = await self.api_client.fetch_multiple_post_details(
-                            post_ids_for_detail,
-                            concurrency=5,
-                        )
+                if fetch_details and items_for_detail:
+                    logger.info(f"Fetching details for {len(items_for_detail)} posts")
+                    for item in items_for_detail:
+                        try:
+                            detail_item = await self.dcard_connector.fetch_detail(item)
+                            if detail_item is None:
+                                continue
 
-                        for pid, detail in details.items():
-                            if detail:
-                                try:
-                                    normalized_detail = (
-                                        self.parser.normalize_detail(detail)
-                                    )
-                                    normalized_detail.source_id = source_id
-                                    is_valid, issues = (
-                                        self.quality_service.validate(
-                                            normalized_detail
-                                        )
-                                    )
+                            normalized_detail = self.dcard_connector.normalize_item(detail_item)
+                            normalized_detail.source_id = source_id
+                            is_valid, issues = self.quality_service.validate(normalized_detail)
 
-                                    if is_valid:
-                                        self.repository.upsert(normalized_detail)
-                                        stats["posts_detailed"] += 1
-                                    else:
-                                        logger.warning(
-                                            f"Post {pid} detail validation "
-                                            f"failed: {issues}"
-                                        )
-                                except Exception as e:
-                                    logger.error(
-                                        f"Failed to store detail for {pid}: {e}"
-                                    )
-                                    stats["errors"] += 1
-                    except Exception as e:
-                        logger.error(f"Failed to fetch post details: {e}")
-                        stats["errors"] += 1
+                            if is_valid:
+                                self.repository.upsert(normalized_detail)
+                                stats["posts_detailed"] += 1
+                            else:
+                                logger.warning(
+                                    f"Post {item.external_id} detail validation failed: {issues}"
+                                )
+                        except PolicyBlockedError:
+                            raise
+                        except Exception as e:
+                            logger.error(
+                                f"Failed to fetch/store detail for {item.external_id}: {e}"
+                            )
+                            stats["errors"] += 1
 
                 # Save checkpoint
                 checkpoint = Checkpoint(
@@ -229,8 +232,17 @@ class IngestService:
 
         except KeyboardInterrupt:
             logger.warning("Crawl interrupted by user")
+            fatal_error = KeyboardInterrupt("Crawl interrupted by user")
+            stats["errors"] += 1
+        except PolicyBlockedError as e:
+            logger.error(f"Crawl stopped by policy: {e}")
+            fatal_error = e
+            stats["errors"] += 1
+            stats["error_category"] = e.category.value
+            stats["error_reason"] = str(e)
         except Exception as e:
             logger.error(f"Crawl failed with exception: {e}")
+            fatal_error = e
             stats["errors"] += 1
         finally:
             stats["completed_at"] = datetime.now().isoformat()
@@ -245,19 +257,40 @@ class IngestService:
                 )
                 self.checkpoint_service.save(final_checkpoint)
 
-            if stats["errors"]:
+            request_count = self._connector_request_count(self.dcard_connector)
+            if fatal_error or stats["errors"]:
+                error_category = stats["error_category"] or self._error_category(fatal_error)
+                error_reason = stats["error_reason"] or str(fatal_error or "completed_with_errors")
+                stats["status"] = "failed"
+                stats["error_category"] = error_category
+                stats["error_reason"] = error_reason
                 self.crawl_job_repository.fail(
                     job_id=job_id,
-                    error_message=f"Completed with {stats['errors']} errors",
-                    request_count=stats["posts_listed"] + stats["posts_detailed"],
+                    error_message=error_reason,
+                    request_count=request_count,
                     item_count=stats["posts_stored"],
+                    error_category=error_category,
+                    error_reason=error_reason,
                 )
             else:
+                stats["status"] = "completed"
                 self.crawl_job_repository.finish(
                     job_id=job_id,
-                    request_count=stats["posts_listed"] + stats["posts_detailed"],
+                    request_count=request_count,
                     item_count=stats["posts_stored"],
                 )
 
         logger.info(f"Crawl completed: {stats}")
         return stats
+
+    @staticmethod
+    def _connector_request_count(connector: BaseConnector) -> int:
+        return int(getattr(connector, "request_count", 0))
+
+    @staticmethod
+    def _error_category(error: Exception | None) -> str:
+        if isinstance(error, CrawlerError):
+            return error.category.value
+        if isinstance(error, KeyboardInterrupt):
+            return "interrupted"
+        return ErrorCategory.UNKNOWN.value

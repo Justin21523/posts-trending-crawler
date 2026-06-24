@@ -52,6 +52,8 @@ class CrawlJob(Base):
     started_at = Column(DateTime, default=datetime.now, nullable=False)
     finished_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
+    error_category = Column(String(100), nullable=True)
+    error_reason = Column(String(500), nullable=True)
     request_count = Column(Integer, default=0, nullable=False)
     item_count = Column(Integer, default=0, nullable=False)
 
