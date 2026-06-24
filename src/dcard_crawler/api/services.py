@@ -122,6 +122,85 @@ class APIQueryService:
             query = query.order_by(desc(Post.crawled_at)).limit(limit).offset(offset)
             return list(session.execute(query).all())
 
+    def search_posts(
+        self,
+        *,
+        platform: str | None = None,
+        source: str | None = None,
+        board_or_forum: str | None = None,
+        keyword: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Return paginated posts with total count and simple facets."""
+        with get_session() as session:
+            base = select(Post, Source.name).join(Source, Source.id == Post.source_id)
+            filters = []
+            if platform:
+                filters.append(Post.platform == platform)
+            if source:
+                filters.append(Source.name == source)
+            if board_or_forum:
+                filters.append(Post.board_or_forum == board_or_forum)
+            if keyword:
+                pattern = f"%{keyword}%"
+                filters.append(
+                    or_(
+                        Post.title.ilike(pattern),
+                        Post.excerpt.ilike(pattern),
+                        Post.content.ilike(pattern),
+                    )
+                )
+            if date_from:
+                filters.append(or_(Post.published_at >= date_from, Post.created_at >= date_from))
+            if date_to:
+                filters.append(or_(Post.published_at <= date_to, Post.created_at <= date_to))
+            for item in filters:
+                base = base.where(item)
+
+            count_query = select(func.count()).select_from(Post).join(Source)
+            for item in filters:
+                count_query = count_query.where(item)
+            total = int(session.execute(count_query).scalar() or 0)
+            rows = session.execute(
+                base.order_by(desc(Post.crawled_at)).limit(limit).offset(offset)
+            ).all()
+            facets = {
+                "platforms": [
+                    {"value": name, "count": int(count)}
+                    for name, count in session.execute(
+                        select(Post.platform, func.count(Post.id)).group_by(Post.platform)
+                    ).all()
+                ],
+                "sources": [
+                    {"value": name, "count": int(count)}
+                    for name, count in session.execute(
+                        select(Source.name, func.count(Post.id))
+                        .join(Post, Post.source_id == Source.id, isouter=True)
+                        .group_by(Source.name)
+                    ).all()
+                ],
+                "boards": [
+                    {"value": name, "count": int(count)}
+                    for name, count in session.execute(
+                        select(Post.board_or_forum, func.count(Post.id))
+                        .where(Post.board_or_forum.is_not(None))
+                        .group_by(Post.board_or_forum)
+                        .order_by(desc(func.count(Post.id)))
+                        .limit(20)
+                    ).all()
+                ],
+            }
+        return {
+            "rows": [self._post_response_dict(post, source_name) for post, source_name in rows],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "facets": facets,
+        }
+
     def list_crawl_jobs(
         self,
         *,
@@ -718,6 +797,146 @@ class APIQueryService:
             "policy_blocks": [self._job_dict(job, source_name) for job, source_name in policy],
         }
 
+    def analytics_drilldown(self, *, kind: str, item_id: str) -> dict[str, Any]:
+        """Return a unified drawer payload for UI drilldown."""
+        with get_session() as session:
+            if kind == "post":
+                post = session.get(Post, int(item_id))
+                if not post:
+                    return self._empty_drilldown(kind, item_id)
+                source = session.get(Source, post.source_id)
+                source_name = source.name if source else "unknown"
+                return {
+                    "kind": kind,
+                    "id": item_id,
+                    "title": post.title,
+                    "subtitle": f"{post.platform} / {post.board_or_forum or '-'}",
+                    "summary": {
+                        "engagement_score": self._engagement_score(
+                            post.like_count,
+                            post.comment_count,
+                            post.view_count,
+                        ),
+                        "content_length": len(post.content or ""),
+                        "crawl_source": post.crawl_source,
+                    },
+                    "metadata": self._post_response_dict(post, source_name),
+                    "related_posts": self._related_posts(
+                        session,
+                        post.platform,
+                        post.board_or_forum,
+                    ),
+                    "related_jobs": self._related_jobs(session, post.source_id),
+                    "quality_flags": self._post_quality_flags(post),
+                    "raw_payload": post.raw_json or {},
+                }
+            if kind == "source":
+                source = session.execute(
+                    select(Source).where(Source.name == item_id)
+                ).scalar_one_or_none()
+                if not source and item_id.isdigit():
+                    source = session.get(Source, int(item_id))
+                if not source:
+                    return self._empty_drilldown(kind, item_id)
+                post_count = int(
+                    session.execute(
+                        select(func.count(Post.id)).where(Post.source_id == source.id)
+                    ).scalar()
+                    or 0
+                )
+                return {
+                    "kind": kind,
+                    "id": str(source.id),
+                    "title": source.name,
+                    "subtitle": source.source_type,
+                    "summary": {"post_count": post_count, "enabled": source.enabled},
+                    "metadata": {
+                        "base_url": source.base_url,
+                        "robots_url": source.robots_url,
+                        "notes": source.notes,
+                    },
+                    "related_posts": self._related_posts(session, None, None, source_id=source.id),
+                    "related_jobs": self._related_jobs(session, source.id),
+                    "quality_flags": [],
+                    "raw_payload": {},
+                }
+            if kind == "job":
+                job = session.get(CrawlJob, int(item_id))
+                if not job:
+                    return self._empty_drilldown(kind, item_id)
+                source = session.get(Source, job.source_id)
+                return {
+                    "kind": kind,
+                    "id": item_id,
+                    "title": f"{source.name if source else 'unknown'} / {job.job_type}",
+                    "subtitle": job.status,
+                    "summary": {
+                        "request_count": job.request_count,
+                        "item_count": job.item_count,
+                        "error_category": job.error_category,
+                    },
+                    "metadata": self._job_dict(job, source.name if source else "unknown"),
+                    "related_posts": self._related_posts(
+                        session,
+                        None,
+                        None,
+                        source_id=job.source_id,
+                    ),
+                    "related_jobs": [self._job_dict(job, source.name if source else "unknown")],
+                    "quality_flags": [job.error_reason] if job.error_reason else [],
+                    "raw_payload": {"error_message": job.error_message},
+                }
+        if kind == "keyword":
+            return self._keyword_drilldown(item_id)
+        if kind == "platform":
+            return self._platform_drilldown(item_id)
+        if kind == "workflow_node":
+            try:
+                detail = self._workflow_stage_detail(item_id)
+            except KeyError:
+                return {
+                    "kind": kind,
+                    "id": item_id,
+                    "title": item_id.replace("_", " ").title(),
+                    "subtitle": "Graph node",
+                    "summary": {"node_type": "visualization"},
+                    "metadata": {"id": item_id},
+                    "related_posts": self.search_posts(limit=8)["rows"],
+                    "related_jobs": self.analytics_overview()["latest_jobs"],
+                    "quality_flags": [],
+                    "raw_payload": {},
+                }
+            return {
+                "kind": kind,
+                "id": item_id,
+                "title": item_id.replace("_", " ").title(),
+                "subtitle": detail["purpose"],
+                "summary": {"artifact": detail["artifact"], "compliance": detail["compliance"]},
+                "metadata": detail,
+                "related_posts": self.search_posts(limit=8)["rows"],
+                "related_jobs": [item for item, _ in []],
+                "quality_flags": detail["failure_modes"],
+                "raw_payload": detail,
+            }
+        if kind == "kpi":
+            overview = self.analytics_overview()
+            return {
+                "kind": kind,
+                "id": item_id,
+                "title": item_id.replace("_", " ").title(),
+                "subtitle": "Dashboard KPI",
+                "summary": overview["kpis"],
+                "metadata": {
+                    "demo_dataset_present": overview["demo_dataset_present"],
+                    "platforms": overview["platforms"],
+                },
+                "related_posts": overview["top_posts"],
+                "related_jobs": overview["latest_jobs"],
+                "quality_flags": [],
+                "raw_payload": overview,
+            }
+        return self._empty_drilldown(kind, item_id)
+
     def workflow_summary(self) -> dict[str, Any]:
         """Return a visual crawl workflow summary for the portfolio UI."""
         overview = self.analytics_overview()
@@ -1050,6 +1269,138 @@ class APIQueryService:
             {"date": day, group_key: group, "count": count}
             for (day, group), count in sorted(counter.items())
         ]
+
+    def _post_response_dict(self, post: Post, source_name: str) -> dict[str, Any]:
+        return {
+            "id": post.id,
+            "source": source_name,
+            "source_id": post.source_id,
+            "platform": post.platform,
+            "external_id": post.external_id,
+            "post_id": post.post_id,
+            "board_or_forum": post.board_or_forum,
+            "title": post.title,
+            "excerpt": post.excerpt,
+            "content": post.content,
+            "published_at": post.published_at,
+            "created_at": post.created_at,
+            "crawled_at": post.crawled_at.isoformat() if post.crawled_at else None,
+            "like_count": post.like_count or 0,
+            "comment_count": post.comment_count or 0,
+            "share_count": post.share_count or 0,
+            "view_count": post.view_count or 0,
+            "url": post.url,
+            "canonical_url": post.canonical_url,
+            "content_hash": post.content_hash,
+        }
+
+    def _related_posts(
+        self,
+        session,
+        platform: str | None,
+        board_or_forum: str | None,
+        *,
+        source_id: int | None = None,
+        limit: int = 8,
+    ) -> list[dict[str, Any]]:
+        query = select(Post, Source.name).join(Source, Source.id == Post.source_id)
+        if source_id:
+            query = query.where(Post.source_id == source_id)
+        elif platform:
+            query = query.where(Post.platform == platform)
+            if board_or_forum:
+                query = query.where(Post.board_or_forum == board_or_forum)
+        rows = session.execute(query.order_by(desc(Post.crawled_at)).limit(limit)).all()
+        return [self._post_response_dict(post, source_name) for post, source_name in rows]
+
+    def _related_jobs(self, session, source_id: int, *, limit: int = 8) -> list[dict[str, Any]]:
+        rows = session.execute(
+            select(CrawlJob, Source.name)
+            .join(Source)
+            .where(CrawlJob.source_id == source_id)
+            .order_by(desc(CrawlJob.started_at))
+            .limit(limit)
+        ).all()
+        return [self._job_dict(job, source_name) for job, source_name in rows]
+
+    @staticmethod
+    def _post_quality_flags(post: Post) -> list[str]:
+        flags = []
+        if not post.content:
+            flags.append("missing_content")
+        if not post.published_at:
+            flags.append("missing_published_at")
+        if not post.content_hash:
+            flags.append("missing_content_hash")
+        if post.crawl_source == "demo":
+            flags.append("demo_dataset")
+        return flags
+
+    def _keyword_drilldown(self, keyword: str) -> dict[str, Any]:
+        rows = self.search_posts(keyword=keyword, limit=12)["rows"]
+        return {
+            "kind": "keyword",
+            "id": keyword,
+            "title": keyword,
+            "subtitle": "Keyword drilldown",
+            "summary": {"related_posts": len(rows)},
+            "metadata": {
+                "keyword": keyword,
+                "heatmap_cells": [
+                    cell
+                    for cell in self.analytics_keyword_heatmap()["cells"]
+                    if cell["keyword"] == keyword
+                ],
+            },
+            "related_posts": rows,
+            "related_jobs": self.analytics_overview()["latest_jobs"],
+            "quality_flags": [],
+            "raw_payload": self.analytics_keyword_network(),
+        }
+
+    def _platform_drilldown(self, platform: str) -> dict[str, Any]:
+        rows = self.search_posts(platform=platform, limit=12)["rows"]
+        stats = next(
+            (
+                item
+                for item in self.analytics_platforms()["platforms"]
+                if item["platform"] == platform
+            ),
+            {},
+        )
+        return {
+            "kind": "platform",
+            "id": platform,
+            "title": platform,
+            "subtitle": "Platform drilldown",
+            "summary": stats,
+            "metadata": {
+                "source_health": [
+                    row
+                    for row in self.analytics_source_health()["rows"]
+                    if row["platform"] == platform
+                ],
+            },
+            "related_posts": rows,
+            "related_jobs": self.analytics_overview()["latest_jobs"],
+            "quality_flags": [],
+            "raw_payload": stats,
+        }
+
+    @staticmethod
+    def _empty_drilldown(kind: str, item_id: str) -> dict[str, Any]:
+        return {
+            "kind": kind,
+            "id": item_id,
+            "title": f"{kind}:{item_id}",
+            "subtitle": "No matching record found.",
+            "summary": {},
+            "metadata": {},
+            "related_posts": [],
+            "related_jobs": [],
+            "quality_flags": ["not_found"],
+            "raw_payload": {},
+        }
 
     @staticmethod
     def _quality_post_row(post: Post, source_name: str) -> dict[str, Any]:

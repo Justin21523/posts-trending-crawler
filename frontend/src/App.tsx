@@ -1,10 +1,13 @@
 import {
   Background,
   Controls,
+  Handle,
   MiniMap,
+  Position,
   ReactFlow,
   type Edge,
   type Node,
+  type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
@@ -68,6 +71,7 @@ import type {
   DemoStoryAnalytics,
   DemoStoryStep,
   DiagnosticsResponse,
+  DrilldownResponse,
   EngagementAnalytics,
   GraphNode,
   KeywordHeatmapAnalytics,
@@ -76,6 +80,7 @@ import type {
   LineageAnalytics,
   PlatformAnalytics,
   PostResponse,
+  PostsSearchResponse,
   ReportSummary,
   SourceCatalogEntryStatus,
   SourceHealthAnalytics,
@@ -132,6 +137,7 @@ const pages: Array<{ key: PageKey; label: string; icon: typeof Activity }> = [
 ];
 
 const chartColors = ['#2563eb', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#0891b2'];
+const graphNodeTypes = { enhanced: EnhancedFlowNode };
 
 export function App() {
   const [activePage, setActivePage] = useState<PageKey>('overview');
@@ -155,67 +161,84 @@ export function App() {
   const [sources, setSources] = useState<SourceResponse[]>([]);
   const [sourceCatalog, setSourceCatalog] = useState<SourceCatalogEntryStatus[]>([]);
   const [posts, setPosts] = useState<PostResponse[]>([]);
+  const [postsTotal, setPostsTotal] = useState(0);
+  const [postFacets, setPostFacets] = useState<PostsSearchResponse['facets']>({});
   const [jobs, setJobs] = useState<CrawlJobResponse[]>([]);
   const [reports, setReports] = useState<ReportSummary[]>([]);
-  const [selectedPost, setSelectedPost] = useState<PostResponse | null>(null);
   const [filters, setFilters] = useState<PostFilters>({ limit: 50 });
+  const [coreLoading, setCoreLoading] = useState(true);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [demoRunning, setDemoRunning] = useState(false);
+  const [endpointStatus, setEndpointStatus] = useState<Record<string, string>>({});
+  const [insight, setInsight] = useState<DrilldownResponse | null>(null);
+  const [insightLoading, setInsightLoading] = useState(false);
   const [status, setStatus] = useState('Connecting to backend...');
 
   const loadCore = useCallback(async () => {
+    setCoreLoading(true);
+    const requests = [
+      ['summary', api.summary()],
+      ['sources', api.sources()],
+      ['sourceCatalog', api.sourceCatalog()],
+      ['jobs', api.jobs()],
+      ['reports', api.reports()],
+      ['overview', api.analytics.overview()],
+      ['dashboard', api.analytics.dashboard()],
+      ['timeSeries', api.analytics.timeSeries()],
+      ['keywordNetwork', api.analytics.keywordNetwork()],
+      ['keywordHeatmap', api.analytics.keywordHeatmap()],
+      ['sourceHealth', api.analytics.sourceHealth()],
+      ['lineage', api.analytics.lineage()],
+      ['crawlFlow', api.analytics.crawlFlow()],
+      ['dataQualityTable', api.analytics.dataQualityTable()],
+      ['demoStory', api.analytics.demoStory()],
+      ['trends', api.analytics.trends()],
+      ['keywords', api.analytics.keywords()],
+      ['engagement', api.analytics.engagement()],
+      ['platforms', api.analytics.platforms()],
+      ['quality', api.analytics.dataQuality()],
+      ['workflow', api.analytics.workflow()],
+    ] as const;
+    const results = await Promise.allSettled(requests.map(([, request]) => request));
+    const nextEndpointStatus: Record<string, string> = {};
+    const value = <T,>(index: number): T | null => {
+      const result = results[index];
+      const name = requests[index][0];
+      if (result.status === 'fulfilled') {
+        nextEndpointStatus[name] = 'ready';
+        return result.value as T;
+      }
+      nextEndpointStatus[name] = result.reason instanceof Error ? result.reason.message : 'failed';
+      return null;
+    };
     try {
-      const [
-        nextSummary,
-        nextSources,
-        nextSourceCatalog,
-        nextJobs,
-        nextReports,
-        nextOverview,
-        nextDashboard,
-        nextTimeSeries,
-        nextKeywordNetwork,
-        nextKeywordHeatmap,
-        nextSourceHealth,
-        nextLineage,
-        nextCrawlFlow,
-        nextDataQualityTable,
-        nextDemoStory,
-        nextTrends,
-        nextKeywords,
-        nextEngagement,
-        nextPlatforms,
-        nextQuality,
-        nextWorkflow,
-      ] = await Promise.all([
-        api.summary(),
-        api.sources(),
-        api.sourceCatalog(),
-        api.jobs(),
-        api.reports(),
-        api.analytics.overview(),
-        api.analytics.dashboard(),
-        api.analytics.timeSeries(),
-        api.analytics.keywordNetwork(),
-        api.analytics.keywordHeatmap(),
-        api.analytics.sourceHealth(),
-        api.analytics.lineage(),
-        api.analytics.crawlFlow(),
-        api.analytics.dataQualityTable(),
-        api.analytics.demoStory(),
-        api.analytics.trends(),
-        api.analytics.keywords(),
-        api.analytics.engagement(),
-        api.analytics.platforms(),
-        api.analytics.dataQuality(),
-        api.analytics.workflow(),
-      ]);
+      const nextSummary = value<DashboardSummary>(0);
+      const nextSources = value<SourceResponse[]>(1);
+      const nextSourceCatalog = value<SourceCatalogEntryStatus[]>(2);
+      const nextJobs = value<CrawlJobResponse[]>(3);
+      const nextReports = value<ReportSummary[]>(4);
+      const nextOverview = value<AnalyticsOverview>(5);
+      const nextDashboard = value<DashboardAnalytics>(6);
+      const nextTimeSeries = value<TimeSeriesAnalytics>(7);
+      const nextKeywordNetwork = value<KeywordNetworkAnalytics>(8);
+      const nextKeywordHeatmap = value<KeywordHeatmapAnalytics>(9);
+      const nextSourceHealth = value<SourceHealthAnalytics>(10);
+      const nextLineage = value<LineageAnalytics>(11);
+      const nextCrawlFlow = value<CrawlFlowAnalytics>(12);
+      const nextDataQualityTable = value<DataQualityTableAnalytics>(13);
+      const nextDemoStory = value<DemoStoryAnalytics>(14);
+      const nextTrends = value<TrendAnalytics>(15);
+      const nextKeywords = value<KeywordAnalytics>(16);
+      const nextEngagement = value<EngagementAnalytics>(17);
+      const nextPlatforms = value<PlatformAnalytics>(18);
+      const nextQuality = value<DataQualityAnalytics>(19);
+      const nextWorkflow = value<WorkflowSummary>(20);
       setSummary(nextSummary);
-      setSources(nextSources);
-      setSourceCatalog(nextSourceCatalog);
-      setJobs(nextJobs);
-      setReports(nextReports);
+      setSources(nextSources ?? []);
+      setSourceCatalog(nextSourceCatalog ?? []);
+      setJobs(nextJobs ?? []);
+      setReports(nextReports ?? []);
       setOverview(nextOverview);
       setDashboard(nextDashboard);
       setTimeSeries(nextTimeSeries);
@@ -232,22 +255,51 @@ export function App() {
       setPlatforms(nextPlatforms);
       setQuality(nextQuality);
       setWorkflow(nextWorkflow);
-      setStatus(nextSummary.health.database_ready ? 'API ready' : 'Database schema needs init');
+      setEndpointStatus(nextEndpointStatus);
+      setStatus(nextSummary?.health.database_ready ? 'API ready' : 'Partial data loaded');
     } catch (error) {
       setStatus((error as Error).message);
+    } finally {
+      setCoreLoading(false);
     }
   }, []);
 
   const loadPosts = useCallback(async (nextFilters: PostFilters) => {
     setLoadingPosts(true);
     try {
-      setPosts(await api.posts(nextFilters));
+      const result = await api.postsSearch(nextFilters);
+      setPosts(result.rows);
+      setPostsTotal(result.total);
+      setPostFacets(result.facets);
     } catch (error) {
       setStatus((error as Error).message);
     } finally {
       setLoadingPosts(false);
     }
   }, []);
+
+  async function openDrilldown(kind: string, id: string | number, fallback?: Partial<DrilldownResponse>) {
+    setInsight({
+      kind,
+      id: String(id),
+      title: fallback?.title ?? `${kind}:${id}`,
+      subtitle: fallback?.subtitle ?? 'Loading detail...',
+      summary: fallback?.summary ?? {},
+      metadata: fallback?.metadata ?? {},
+      related_posts: fallback?.related_posts ?? [],
+      related_jobs: fallback?.related_jobs ?? [],
+      quality_flags: fallback?.quality_flags ?? [],
+      raw_payload: fallback?.raw_payload ?? {},
+    });
+    setInsightLoading(true);
+    try {
+      setInsight(await api.analytics.drilldown({ kind, id }));
+    } catch (error) {
+      setStatus((error as Error).message);
+    } finally {
+      setInsightLoading(false);
+    }
+  }
 
   useEffect(() => {
     void loadCore();
@@ -345,11 +397,20 @@ export function App() {
         )}
 
         {demoMode && <InterviewDemoGuide activePage={activePage} story={demoStory} />}
+        {coreLoading && <div className="loading-strip">Loading analytics endpoints...</div>}
+        <EndpointStatusMatrix statuses={endpointStatus} />
 
         {renderPage(activePage)}
       </section>
 
-      {selectedPost && <PostDrawer post={selectedPost} onClose={() => setSelectedPost(null)} />}
+      {insight && (
+        <InsightDrawer
+          insight={insight}
+          loading={insightLoading}
+          onClose={() => setInsight(null)}
+          onDrilldown={(kind, id) => void openDrilldown(kind, id)}
+        />
+      )}
     </main>
   );
 
@@ -358,30 +419,72 @@ export function App() {
       case 'overview':
         return (
           <>
-            <SummaryCards summary={summary} />
-            <OverviewDashboard dashboard={dashboard} jobs={jobs} />
+            <SummaryCards
+              summary={summary}
+              onSelectMetric={(key, label, value) => void openDrilldown('kpi', key, {
+                title: label,
+                summary: { value },
+              })}
+            />
+            <OverviewDashboard
+              dashboard={dashboard}
+              jobs={jobs}
+              onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+            />
           </>
         );
       case 'demo':
         return <DemoWalkthroughPage story={demoStory} onRunDemo={() => void runDemoWorkflow()} running={demoRunning} />;
       case 'architecture':
-        return <ArchitectureMapPage graph={demoStory?.architecture ?? null} story={demoStory} />;
+        return (
+          <ArchitectureMapPage
+            graph={demoStory?.architecture ?? null}
+            story={demoStory}
+            onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+          />
+        );
       case 'sources':
-        return <SourceRegistry sources={sources} catalog={sourceCatalog} summary={summary} />;
+        return (
+          <SourceRegistry
+            sources={sources}
+            catalog={sourceCatalog}
+            summary={summary}
+            onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+          />
+        );
       case 'workflow':
-        return <WorkflowPage workflow={workflow} crawlFlow={crawlFlow} />;
+        return (
+          <WorkflowPage
+            workflow={workflow}
+            crawlFlow={crawlFlow}
+            onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+          />
+        );
       case 'lifecycle':
-        return <LifecycleStoryPage graph={demoStory?.lifecycle ?? null} story={demoStory} />;
+        return (
+          <LifecycleStoryPage
+            graph={demoStory?.lifecycle ?? null}
+            story={demoStory}
+            onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+          />
+        );
       case 'runs':
         return <JobsTimeline jobs={jobs} />;
       case 'explorer':
         return (
           <PostsExplorer
             posts={posts}
+            total={postsTotal}
+            facets={postFacets}
             filters={filters}
             loading={loadingPosts}
-            onFiltersChange={(nextFilters) => setFilters({ ...nextFilters, limit: 50 })}
-            onSelectPost={setSelectedPost}
+            onFiltersChange={(nextFilters) => setFilters({ ...nextFilters, limit: 50, offset: 0 })}
+            onPageChange={(offset) => setFilters((current) => ({ ...current, offset }))}
+            onSelectPost={(post) => void openDrilldown('post', post.id, {
+              title: post.title,
+              subtitle: `${post.platform} / ${post.board_or_forum ?? '-'}`,
+              metadata: post as unknown as Record<string, unknown>,
+            })}
           />
         );
       case 'trends':
@@ -392,14 +495,28 @@ export function App() {
             keywords={keywords}
             network={keywordNetwork}
             heatmap={keywordHeatmap}
+            onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
           />
         );
       case 'engagement':
         return <EngagementPage engagement={engagement} />;
       case 'platforms':
-        return <PlatformPage platforms={platforms} sourceHealth={sourceHealth} />;
+        return (
+          <PlatformPage
+            platforms={platforms}
+            sourceHealth={sourceHealth}
+            onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+          />
+        );
       case 'quality':
-        return <QualityPage quality={quality} lineage={lineage} table={dataQualityTable} />;
+        return (
+          <QualityPage
+            quality={quality}
+            lineage={lineage}
+            table={dataQualityTable}
+            onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+          />
+        );
       case 'reports':
         return <ReportsCenter reports={reports} />;
       case 'compliance':
@@ -419,6 +536,117 @@ export function App() {
         return null;
     }
   }
+}
+
+function EndpointStatusMatrix({ statuses }: { statuses: Record<string, string> }) {
+  const entries = Object.entries(statuses);
+  if (!entries.length) {
+    return null;
+  }
+  const failed = entries.filter(([, value]) => value !== 'ready');
+  return (
+    <div className="endpoint-matrix" aria-label="Endpoint loading status">
+      <span>{entries.length - failed.length}/{entries.length} endpoints ready</span>
+      {failed.slice(0, 4).map(([name, message]) => (
+        <button className="endpoint-error" key={name} type="button" title={message}>
+          {name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function EnhancedFlowNode({ data, selected }: NodeProps) {
+  const payload = data as Record<string, unknown>;
+  const status = String(payload.status ?? payload.type ?? 'ready');
+  return (
+    <button className={selected ? 'enhanced-node selected' : 'enhanced-node'} type="button">
+      <Handle type="target" position={Position.Left} />
+      <div className={`node-orbit node-status-${status.replaceAll('_', '-')}`} />
+      <div className="node-body">
+        <strong>{String(payload.label ?? 'Node')}</strong>
+        <span>{String(payload.purpose ?? payload.subtitle ?? payload.type ?? 'interactive graph node')}</span>
+      </div>
+      <b>{String(payload.count ?? payload.value ?? '')}</b>
+      <Handle type="source" position={Position.Right} />
+    </button>
+  );
+}
+
+function InsightDrawer({
+  insight,
+  loading,
+  onClose,
+  onDrilldown,
+}: {
+  insight: DrilldownResponse;
+  loading: boolean;
+  onClose: () => void;
+  onDrilldown: (kind: string, id: string | number) => void;
+}) {
+  const relatedPostColumns = columnsForRows(insight.related_posts);
+  const relatedJobColumns = columnsForRows(insight.related_jobs);
+  return (
+    <aside className="drawer insight-drawer" aria-label="Insight detail">
+      <div className="drawer-header">
+        <div>
+          <p className="eyebrow">{insight.kind} / {insight.id}</p>
+          <h2>{insight.title}</h2>
+          <span>{insight.subtitle}</span>
+        </div>
+        <button className="icon-button" type="button" onClick={onClose} aria-label="Close insight detail">
+          <X size={17} />
+        </button>
+      </div>
+      {loading && <div className="loading-strip">Loading drilldown...</div>}
+      <div className="drawer-body">
+        <InsightSection title="Summary" payload={insight.summary} />
+        <InsightSection title="Metadata" payload={insight.metadata} />
+        {insight.quality_flags.length > 0 && (
+          <div className="detail-section">
+            <strong>Quality Flags</strong>
+            <TagList items={insight.quality_flags} tone="danger" />
+          </div>
+        )}
+        <div className="detail-section">
+          <strong>Related Posts</strong>
+          <DataTable
+            columns={relatedPostColumns}
+            data={insight.related_posts}
+            onRowSelect={(row) => row.id && onDrilldown('post', String(row.id))}
+          />
+        </div>
+        <div className="detail-section">
+          <strong>Related Crawl Jobs</strong>
+          <DataTable
+            columns={relatedJobColumns}
+            data={insight.related_jobs}
+            onRowSelect={(row) => row.id && onDrilldown('job', String(row.id))}
+          />
+        </div>
+        <div className="detail-section">
+          <strong>Raw Payload</strong>
+          <pre className="json-panel">{JSON.stringify(insight.raw_payload, null, 2)}</pre>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function InsightSection({ title, payload }: { title: string; payload: Record<string, unknown> }) {
+  return (
+    <div className="detail-section">
+      <strong>{title}</strong>
+      <div className="metadata-list">
+        {Object.entries(payload).length ? Object.entries(payload).map(([key, value]) => (
+          <div className="metadata-row" key={key}>
+            <strong>{key}</strong>
+            <span>{formatValue(value)}</span>
+          </div>
+        )) : <div className="empty-state">No metadata.</div>}
+      </div>
+    </div>
+  );
 }
 
 function InterviewDemoGuide({
@@ -552,14 +780,18 @@ function StoryStepDetail({ step }: { step: DemoStoryStep | null }) {
 function ArchitectureMapPage({
   graph,
   story,
+  onDrilldown,
 }: {
   graph: StoryGraph | null;
   story: DemoStoryAnalytics | null;
+  onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
   return (
-    <section className="flow-layout">
-      <StoryGraphPanel graph={graph} title="System Architecture Map" />
-      <aside className="panel node-detail-panel">
+    <section className="page-grid analytics-grid">
+      <div className="wide-panel">
+        <StoryGraphPanel graph={graph} title="System Architecture Map" onDrilldown={onDrilldown} />
+      </div>
+      <aside className="panel wide-panel">
         <div className="panel-header"><h2>Architecture Narrative</h2></div>
         <div className="metadata-list">
           <div className="metadata-row"><strong>Sources</strong><span>Public forums, RSS feeds, sitemap targets, and API-first connectors.</span></div>
@@ -580,14 +812,16 @@ function ArchitectureMapPage({
 function LifecycleStoryPage({
   graph,
   story,
+  onDrilldown,
 }: {
   graph: StoryGraph | null;
   story: DemoStoryAnalytics | null;
+  onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
   return (
     <section className="page-grid analytics-grid">
       <div className="wide-panel">
-        <StoryGraphPanel graph={graph} title="Raw Data to Excel Lineage" />
+        <StoryGraphPanel graph={graph} title="Raw Data to Excel Lineage" onDrilldown={onDrilldown} />
       </div>
       <div className="panel">
         <div className="panel-header"><h2>Lifecycle Explanation</h2></div>
@@ -612,10 +846,19 @@ function LifecycleStoryPage({
   );
 }
 
-function StoryGraphPanel({ graph, title }: { graph: StoryGraph | null; title: string }) {
+function StoryGraphPanel({
+  graph,
+  title,
+  onDrilldown,
+}: {
+  graph: StoryGraph | null;
+  title: string;
+  onDrilldown?: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
+}) {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const nodes = (graph?.nodes ?? []).map((node) => ({
     id: node.id,
+    type: 'enhanced',
     position: node.position ?? { x: 0, y: 0 },
     data: { label: node.label ?? node.id, ...node },
     className: `flow-node story-node-${node.type ?? 'default'}`,
@@ -628,7 +871,20 @@ function StoryGraphPanel({ graph, title }: { graph: StoryGraph | null; title: st
           <h2>{title}</h2>
           <span className="pill">click nodes</span>
         </div>
-        <ReactFlow nodes={nodes} edges={edges} fitView onNodeClick={(_, node) => setSelectedNode(node as unknown as GraphNode)}>
+        <ReactFlow
+          nodeTypes={graphNodeTypes}
+          nodes={nodes}
+          edges={edges}
+          fitView
+          onNodeClick={(_, node) => {
+            setSelectedNode(node as unknown as GraphNode);
+            onDrilldown?.('workflow_node', node.id, {
+              title: String(node.data?.label ?? node.id),
+              subtitle: String(node.data?.type ?? 'Graph node'),
+              metadata: node.data as Record<string, unknown>,
+            });
+          }}
+        >
           <MiniMap />
           <Controls />
           <Background />
@@ -642,9 +898,11 @@ function StoryGraphPanel({ graph, title }: { graph: StoryGraph | null; title: st
 function OverviewDashboard({
   dashboard,
   jobs,
+  onDrilldown,
 }: {
   dashboard: DashboardAnalytics | null;
   jobs: CrawlJobResponse[];
+  onDrilldown: (kind: string, id: string | number, fallback?: Partial<DrilldownResponse>) => void;
 }) {
   const areaData = pivotSeries(dashboard?.daily_platform_volume ?? [], 'platform');
   const platforms = uniqueGroups(dashboard?.daily_platform_volume ?? [], 'platform');
@@ -658,7 +916,7 @@ function OverviewDashboard({
 
   return (
     <section className="page-grid analytics-grid">
-      <div className="panel wide-panel">
+      <button className="panel wide-panel interactive-panel" type="button" onClick={() => onDrilldown('kpi', 'daily_platform_volume', { title: 'Daily Platform Volume', raw_payload: { rows: dashboard?.daily_platform_volume ?? [] } })}>
         <div className="panel-header">
           <h2>Daily Platform Volume</h2>
           <span className="pill">stacked area</span>
@@ -682,9 +940,9 @@ function OverviewDashboard({
             ))}
           </AreaChart>
         </ResponsiveContainer>
-      </div>
+      </button>
 
-      <div className="panel">
+      <button className="panel interactive-panel" type="button" onClick={() => onDrilldown('kpi', 'platform_distribution', { title: 'Platform Distribution', raw_payload: { rows: dashboard?.platform_distribution ?? [] } })}>
         <div className="panel-header">
           <h2>Platform Distribution</h2>
         </div>
@@ -705,9 +963,9 @@ function OverviewDashboard({
             <Tooltip />
           </PieChart>
         </ResponsiveContainer>
-      </div>
+      </button>
 
-      <div className="panel">
+      <button className="panel interactive-panel" type="button" onClick={() => onDrilldown('kpi', 'demo_live_ratio', { title: 'Demo / Live Ratio', summary: ratio })}>
         <div className="panel-header">
           <h2>Demo / Live Ratio</h2>
         </div>
@@ -719,9 +977,9 @@ function OverviewDashboard({
           <div className="metadata-row"><strong>Live records</strong><span>{ratio.live}</span></div>
           <div className="metadata-row"><strong>Total records</strong><span>{ratio.total}</span></div>
         </div>
-      </div>
+      </button>
 
-      <div className="panel">
+      <button className="panel interactive-panel" type="button" onClick={() => onDrilldown('kpi', 'crawl_status_counts', { title: 'Crawl Outcome', raw_payload: { rows: dashboard?.crawl_status_counts ?? [] } })}>
         <div className="panel-header">
           <h2>Crawl Outcome</h2>
         </div>
@@ -733,9 +991,9 @@ function OverviewDashboard({
             <Bar dataKey="count" fill="var(--color-primary)" radius={[0, 6, 6, 0]} />
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </button>
 
-      <div className="panel">
+      <button className="panel interactive-panel" type="button" onClick={() => onDrilldown('keyword', dashboard?.top_keywords?.[0]?.keyword ?? 'AI', { title: 'Top Keywords', raw_payload: { rows: dashboard?.top_keywords ?? [] } })}>
         <div className="panel-header">
           <h2>Top Keywords</h2>
         </div>
@@ -747,13 +1005,20 @@ function OverviewDashboard({
             <Bar dataKey="count" fill="var(--color-secondary)" radius={[0, 6, 6, 0]} />
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </button>
 
       <div className="panel wide-panel">
         <div className="panel-header">
           <h2>Latest Hot Posts</h2>
         </div>
-        <DataTable columns={topPostColumns} data={(dashboard?.top_posts ?? []) as Array<Record<string, unknown>>} />
+        <DataTable
+          columns={topPostColumns}
+          data={(dashboard?.top_posts ?? []) as Array<Record<string, unknown>>}
+          onRowSelect={(row) => row.id && onDrilldown('post', String(row.id), {
+            title: String(row.title ?? 'Post'),
+            metadata: row,
+          })}
+        />
       </div>
 
       <div className="panel wide-panel">
@@ -762,13 +1027,13 @@ function OverviewDashboard({
         </div>
         <div className="job-list">
           {jobs.slice(0, 8).map((job) => (
-            <div className="job-row" key={job.id}>
+            <button className="job-row interactive-row" type="button" key={job.id} onClick={() => onDrilldown('job', job.id, { title: `${job.source} / ${job.job_type}`, metadata: job as unknown as Record<string, unknown> })}>
               <div>
                 <div className="job-title">{job.source} / {job.job_type}</div>
                 <div className="job-meta">{job.request_count} requests / {job.item_count} items</div>
               </div>
               <StatusBadge value={job.status} />
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -780,14 +1045,24 @@ function SourceRegistry({
   sources,
   catalog,
   summary,
+  onDrilldown,
 }: {
   sources: SourceResponse[];
   catalog: SourceCatalogEntryStatus[];
   summary: DashboardSummary | null;
+  onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
   return (
     <section className="page-grid">
-      <SourceOverview sources={sources} summary={summary} />
+      <SourceOverview
+        sources={sources}
+        summary={summary}
+        onSelectSource={(source) => onDrilldown('source', source.name, {
+          title: source.name,
+          subtitle: source.source_type,
+          metadata: source as unknown as Record<string, unknown>,
+        })}
+      />
       <div className="panel">
         <div className="panel-header">
           <h2>Catalog Summary</h2>
@@ -814,7 +1089,11 @@ function SourceRegistry({
         </div>
         <div className="catalog-grid">
           {catalog.map((source) => (
-            <div className="catalog-card" key={source.name}>
+            <button className="catalog-card interactive-panel" type="button" key={source.name} onClick={() => onDrilldown('source', source.name, {
+              title: source.display_name,
+              subtitle: `${source.platform} / ${source.strategy}`,
+              metadata: source as unknown as Record<string, unknown>,
+            })}>
               <div className="catalog-title">
                 <div>
                   <strong>{source.display_name}</strong>
@@ -830,7 +1109,7 @@ function SourceRegistry({
               </div>
               <p>{source.board ?? source.target_url ?? source.base_url}</p>
               {source.last_error && <small>{source.last_error}</small>}
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -841,13 +1120,16 @@ function SourceRegistry({
 function WorkflowPage({
   workflow,
   crawlFlow,
+  onDrilldown,
 }: {
   workflow: WorkflowSummary | null;
   crawlFlow: CrawlFlowAnalytics | null;
+  onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const nodes = (crawlFlow?.nodes ?? []).map((node) => ({
     ...node,
+    type: 'enhanced',
     className: `flow-node flow-node-${String(node.data?.status ?? 'unknown').replaceAll('_', '-')}`,
   })) as Node[];
   const edges = (crawlFlow?.edges ?? []) as Edge[];
@@ -859,7 +1141,20 @@ function WorkflowPage({
           <h2>Crawler Pipeline Graph</h2>
           {workflow?.latest_error && <span className="pill">latest stop condition captured</span>}
         </div>
-        <ReactFlow nodes={nodes} edges={edges} fitView onNodeClick={(_, node) => setSelectedNode(node as unknown as GraphNode)}>
+        <ReactFlow
+          nodeTypes={graphNodeTypes}
+          nodes={nodes}
+          edges={edges}
+          fitView
+          onNodeClick={(_, node) => {
+            setSelectedNode(node as unknown as GraphNode);
+            onDrilldown('workflow_node', node.id, {
+              title: String(node.data?.label ?? node.id),
+              subtitle: String(node.data?.purpose ?? 'Workflow node'),
+              metadata: node.data as Record<string, unknown>,
+            });
+          }}
+        >
           <MiniMap />
           <Controls />
           <Background />
@@ -918,10 +1213,12 @@ function KeywordPage({
   keywords,
   network,
   heatmap,
+  onDrilldown,
 }: {
   keywords: KeywordAnalytics | null;
   network: KeywordNetworkAnalytics | null;
   heatmap: KeywordHeatmapAnalytics | null;
+  onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
   const [selectedNode, setSelectedNode] = useState<Record<string, unknown> | null>(null);
   const heatmapMax = Math.max(...(heatmap?.cells ?? []).map((cell) => cell.count), 1);
@@ -951,7 +1248,14 @@ function KeywordPage({
           nodeVal="value"
           linkWidth={(link) => Math.max(1, Number(link.value ?? 1) / 6)}
           nodeColor={() => 'var(--color-primary)'}
-          onNodeClick={(node) => setSelectedNode(node as Record<string, unknown>)}
+          onNodeClick={(node) => {
+            const payload = node as Record<string, unknown>;
+            setSelectedNode(payload);
+            onDrilldown('keyword', String(payload.id ?? payload.label ?? 'AI'), {
+              title: String(payload.label ?? payload.id ?? 'Keyword'),
+              metadata: payload,
+            });
+          }}
           width={520}
           height={320}
         />
@@ -972,7 +1276,14 @@ function KeywordPage({
       </div>
       <div className="panel">
         <div className="panel-header"><h2>Top Phrase Table</h2></div>
-        <DataTable columns={phraseColumns} data={(keywords?.keywords ?? []) as Array<Record<string, unknown>>} />
+        <DataTable
+          columns={phraseColumns}
+          data={(keywords?.keywords ?? []) as Array<Record<string, unknown>>}
+          onRowSelect={(row) => onDrilldown('keyword', String(row.keyword ?? 'AI'), {
+            title: String(row.keyword ?? 'Keyword'),
+            metadata: row,
+          })}
+        />
       </div>
       <div className="panel">
         <div className="panel-header"><h2>Selected Keyword Node</h2></div>
@@ -1016,9 +1327,11 @@ function EngagementPage({ engagement }: { engagement: EngagementAnalytics | null
 function PlatformPage({
   platforms,
   sourceHealth,
+  onDrilldown,
 }: {
   platforms: PlatformAnalytics | null;
   sourceHealth: SourceHealthAnalytics | null;
+  onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
   const platformRows = platforms?.platforms ?? [];
   const radarData = platformRows.map((row) => ({
@@ -1087,7 +1400,14 @@ function PlatformPage({
       </div>
       <div className="panel wide-panel">
         <div className="panel-header"><h2>Source Health Matrix</h2></div>
-        <DataTable columns={sourceColumns} data={(sourceHealth?.rows ?? []) as Array<Record<string, unknown>>} />
+        <DataTable
+          columns={sourceColumns}
+          data={(sourceHealth?.rows ?? []) as Array<Record<string, unknown>>}
+          onRowSelect={(row) => onDrilldown('source', String(row.source ?? row.display_name), {
+            title: String(row.display_name ?? row.source),
+            metadata: row,
+          })}
+        />
       </div>
     </section>
   );
@@ -1097,15 +1417,18 @@ function QualityPage({
   quality,
   lineage,
   table,
+  onDrilldown,
 }: {
   quality: DataQualityAnalytics | null;
   lineage: LineageAnalytics | null;
   table: DataQualityTableAnalytics | null;
+  onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
 }) {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [activeTable, setActiveTable] = useState<keyof DataQualityTableAnalytics>('missing_content');
   const lineageNodes = (lineage?.nodes ?? []).map((node, index) => ({
     id: node.id,
+    type: 'enhanced',
     position: { x: index * 190, y: index % 2 ? 140 : 20 },
     data: { label: `${node.label ?? node.id} (${node.count ?? 0})`, ...node },
     className: `flow-node lineage-node-${node.type ?? 'default'}`,
@@ -1118,7 +1441,19 @@ function QualityPage({
     <section className="page-grid analytics-grid">
       <div className="panel wide-panel flow-panel lineage-panel">
         <div className="panel-header"><h2>Data Lineage Graph</h2></div>
-        <ReactFlow nodes={lineageNodes} edges={lineageEdges} fitView onNodeClick={(_, node) => setSelectedNode(node as unknown as GraphNode)}>
+        <ReactFlow
+          nodeTypes={graphNodeTypes}
+          nodes={lineageNodes}
+          edges={lineageEdges}
+          fitView
+          onNodeClick={(_, node) => {
+            setSelectedNode(node as unknown as GraphNode);
+            onDrilldown('workflow_node', node.id, {
+              title: String(node.data?.label ?? node.id),
+              metadata: node.data as Record<string, unknown>,
+            });
+          }}
+        >
           <MiniMap />
           <Controls />
           <Background />
@@ -1134,7 +1469,18 @@ function QualityPage({
             <button key={key} className={activeTable === key ? 'active' : ''} type="button" onClick={() => setActiveTable(key)}>{key}</button>
           ))}
         </div>
-        <DataTable columns={columns} data={rows} />
+        <DataTable
+          columns={columns}
+          data={rows}
+          onRowSelect={(row) => {
+            if (row.id) {
+              onDrilldown(activeTable === 'failed_crawls' || activeTable === 'policy_blocks' ? 'job' : 'post', String(row.id), {
+                title: String(row.title ?? row.job_type ?? activeTable),
+                metadata: row,
+              });
+            }
+          }}
+        />
       </div>
     </section>
   );
@@ -1240,7 +1586,15 @@ function SettingsPage({ status }: { status: string }) {
   );
 }
 
-function DataTable({ columns, data }: { columns: ColumnDef<Record<string, unknown>>[]; data: Array<Record<string, unknown>> }) {
+function DataTable({
+  columns,
+  data,
+  onRowSelect,
+}: {
+  columns: ColumnDef<Record<string, unknown>>[];
+  data: Array<Record<string, unknown>>;
+  onRowSelect?: (row: Record<string, unknown>) => void;
+}) {
   const table = useReactTable({
     data,
     columns,
@@ -1265,7 +1619,11 @@ function DataTable({ columns, data }: { columns: ColumnDef<Record<string, unknow
         </thead>
         <tbody>
           {table.getRowModel().rows.map((row) => (
-            <tr key={row.id}>
+            <tr
+              className={onRowSelect ? 'clickable-row' : undefined}
+              key={row.id}
+              onClick={() => onRowSelect?.(row.original)}
+            >
               {row.getVisibleCells().map((cell) => (
                 <td key={cell.id}>{String(cell.getValue() ?? '-')}</td>
               ))}
@@ -1287,13 +1645,7 @@ function NodeDetailPanel({ node, title }: { node: GraphNode | null; title: strin
           {Object.entries(payload).map(([key, value]) => (
             <div className="metadata-row" key={key}>
               <strong>{key}</strong>
-              <span>
-                {Array.isArray(value)
-                  ? value.join(', ')
-                  : typeof value === 'object'
-                    ? JSON.stringify(value)
-                    : String(value ?? '-')}
-              </span>
+              <span>{formatValue(value)}</span>
             </div>
           ))}
         </div>
@@ -1392,4 +1744,17 @@ function uniqueGroups<T extends Record<string, string | number>>(rows: T[], grou
 function columnsForRows(rows: Array<Record<string, unknown>>): ColumnDef<Record<string, unknown>>[] {
   const keys = Object.keys(rows[0] ?? {}).slice(0, 6);
   return keys.map((key) => ({ accessorKey: key, header: key }));
+}
+
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => formatValue(item)).join(', ');
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
 }

@@ -4,17 +4,39 @@ import type { PostResponse } from '../api/types';
 
 type PostsExplorerProps = {
   posts: PostResponse[];
+  total: number;
+  facets: Record<string, Array<{ value: string | null; count: number }>>;
   filters: PostFilters;
   loading: boolean;
   onFiltersChange: (filters: PostFilters) => void;
+  onPageChange: (offset: number) => void;
   onSelectPost?: (post: PostResponse) => void;
 };
 
-export function PostsExplorer({ posts, filters, loading, onFiltersChange, onSelectPost }: PostsExplorerProps) {
+export function PostsExplorer({
+  posts,
+  total,
+  facets,
+  filters,
+  loading,
+  onFiltersChange,
+  onPageChange,
+  onSelectPost,
+}: PostsExplorerProps) {
+  const limit = filters.limit ?? 50;
+  const offset = filters.offset ?? 0;
+  const nextOffset = Math.min(offset + limit, Math.max(total - limit, 0));
+  const previousOffset = Math.max(offset - limit, 0);
   return (
     <section className="panel wide-panel">
       <div className="panel-header">
         <h2>Posts Explorer</h2>
+        <span className="pill">{total} rows</span>
+      </div>
+      <div className="facet-strip">
+        {(facets.platforms ?? []).slice(0, 4).map((facet) => (
+          <span key={String(facet.value)}>{facet.value ?? '-'}: {facet.count}</span>
+        ))}
       </div>
       <div className="filters">
         <label>
@@ -75,6 +97,17 @@ export function PostsExplorer({ posts, filters, loading, onFiltersChange, onSele
             )}
           </tbody>
         </table>
+      </div>
+      <div className="pagination-row">
+        <button type="button" onClick={() => onPageChange(previousOffset)} disabled={offset === 0 || loading}>
+          Previous
+        </button>
+        <span>
+          Showing {total ? offset + 1 : 0}-{Math.min(offset + posts.length, total)} of {total}
+        </span>
+        <button type="button" onClick={() => onPageChange(nextOffset)} disabled={offset + limit >= total || loading}>
+          Next
+        </button>
       </div>
     </section>
   );

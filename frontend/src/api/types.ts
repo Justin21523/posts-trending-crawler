@@ -63,6 +63,14 @@ export type PostResponse = {
   content_hash: string | null;
 };
 
+export type PostsSearchResponse = {
+  rows: PostResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+  facets: Record<string, Array<{ value: string | null; count: number }>>;
+};
+
 export type CrawlJobResponse = {
   id: number;
   source: string;
@@ -307,4 +315,17 @@ export type DemoWorkflowRunResponse = {
   status: string;
   stats: Record<string, unknown>;
   summary: Record<string, unknown>;
+};
+
+export type DrilldownResponse = {
+  kind: string;
+  id: string;
+  title: string;
+  subtitle: string;
+  summary: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  related_posts: Array<Record<string, unknown>>;
+  related_jobs: Array<Record<string, unknown>>;
+  quality_flags: string[];
+  raw_payload: Record<string, unknown>;
 };

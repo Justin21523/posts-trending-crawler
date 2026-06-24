@@ -88,6 +88,28 @@ def create_app(
         )
         return [_post_response(post, source_name) for post, source_name in rows]
 
+    @app.get("/posts/search")
+    def posts_search(
+        platform: str | None = None,
+        source: str | None = None,
+        board_or_forum: str | None = None,
+        keyword: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = Query(50, ge=1, le=200),
+        offset: int = Query(0, ge=0),
+    ):
+        return queries.search_posts(
+            platform=platform,
+            source=source,
+            board_or_forum=board_or_forum,
+            keyword=keyword,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            offset=offset,
+        )
+
     @app.get("/crawl-jobs", response_model=list[CrawlJobResponse])
     def crawl_jobs(
         status: str | None = None,
@@ -170,6 +192,10 @@ def create_app(
     @app.get("/analytics/demo-story")
     def analytics_demo_story():
         return queries.analytics_demo_story()
+
+    @app.get("/analytics/drilldown")
+    def analytics_drilldown(kind: str, id: str):
+        return queries.analytics_drilldown(kind=kind, item_id=id)
 
     @app.get("/workflow/summary")
     def workflow_summary():

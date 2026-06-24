@@ -252,3 +252,35 @@ def test_api_demo_story_and_run_workflow(tmp_path, monkeypatch):
         for step in story.json()["walkthrough_steps"]
     )
     assert posts.json()
+
+
+def test_api_posts_search_and_drilldown(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
+    monkeypatch.chdir(tmp_path)
+    init_db(reset=True)
+    DemoSeedService(report_root=tmp_path / "data" / "reports").seed(rows=120, reset_demo=True)
+    client = TestClient(create_app(control_service=FakeControlService()))
+
+    search = client.get("/posts/search", params={"platform": "ptt", "limit": 10, "offset": 0})
+    payload = search.json()
+    post_id = payload["rows"][0]["id"]
+    post_drilldown = client.get("/analytics/drilldown", params={"kind": "post", "id": post_id})
+    source_drilldown = client.get(
+        "/analytics/drilldown",
+        params={"kind": "source", "id": payload["rows"][0]["source"]},
+    )
+    keyword_drilldown = client.get("/analytics/drilldown", params={"kind": "keyword", "id": "AI"})
+    workflow_drilldown = client.get(
+        "/analytics/drilldown",
+        params={"kind": "workflow_node", "id": "policy_check"},
+    )
+
+    assert search.status_code == 200
+    assert payload["total"] >= 10
+    assert payload["rows"]
+    assert payload["facets"]["platforms"]
+    assert post_drilldown.json()["metadata"]["id"] == post_id
+    assert post_drilldown.json()["related_jobs"]
+    assert source_drilldown.json()["summary"]["post_count"] > 0
+    assert keyword_drilldown.json()["related_posts"]
+    assert "http_403_forbidden" in workflow_drilldown.json()["quality_flags"]

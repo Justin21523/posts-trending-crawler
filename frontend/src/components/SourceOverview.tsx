@@ -4,9 +4,10 @@ import type { DashboardSummary, SourceResponse } from '../api/types';
 type SourceOverviewProps = {
   sources: SourceResponse[];
   summary: DashboardSummary | null;
+  onSelectSource?: (source: SourceResponse) => void;
 };
 
-export function SourceOverview({ sources, summary }: SourceOverviewProps) {
+export function SourceOverview({ sources, summary, onSelectSource }: SourceOverviewProps) {
   const platformData = Object.entries(summary?.platforms ?? {}).map(([name, value]) => ({
     name,
     value,
@@ -23,13 +24,13 @@ export function SourceOverview({ sources, summary }: SourceOverviewProps) {
             <div className="empty-state">No sources yet.</div>
           ) : (
             sources.map((source) => (
-              <div className="source-row" key={source.id}>
+              <button className="source-row interactive-row" type="button" key={source.id} onClick={() => onSelectSource?.(source)}>
                 <div>
                   <strong>{source.name}</strong>
                   <span>{source.source_type}</span>
                 </div>
                 <span className={source.enabled ? 'pill pill-green' : 'pill'}>{source.enabled ? 'enabled' : 'off'}</span>
-              </div>
+              </button>
             ))
           )}
         </div>

@@ -9,6 +9,7 @@ import type {
   DemoStoryAnalytics,
   DemoWorkflowRunResponse,
   DiagnosticsResponse,
+  DrilldownResponse,
   EngagementAnalytics,
   KeywordHeatmapAnalytics,
   HealthResponse,
@@ -17,6 +18,7 @@ import type {
   LineageAnalytics,
   PlatformAnalytics,
   PostResponse,
+  PostsSearchResponse,
   ReportSummary,
   SourceHealthAnalytics,
   SourceCatalogEntryStatus,
@@ -50,9 +52,10 @@ export type PostFilters = {
   board_or_forum?: string;
   keyword?: string;
   limit?: number;
+  offset?: number;
 };
 
-function queryString(params: Record<string, string | number | undefined>): string {
+function queryString(params: Record<string, string | number | boolean | undefined>): string {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== '') {
@@ -69,6 +72,8 @@ export const api = {
   sources: () => request<SourceResponse[]>('/sources'),
   sourceCatalog: () => request<SourceCatalogEntryStatus[]>('/source-catalog'),
   posts: (filters: PostFilters) => request<PostResponse[]>(`/posts${queryString(filters)}`),
+  postsSearch: (filters: PostFilters) =>
+    request<PostsSearchResponse>(`/posts/search${queryString(filters)}`),
   jobs: () => request<CrawlJobResponse[]>('/crawl-jobs?limit=20'),
   reports: () => request<ReportSummary[]>('/reports'),
   verifyDcard: (payload: { forum: string; mode: string; max_posts: number }) =>
@@ -105,6 +110,10 @@ export const api = {
     topPosts: () => request<{ rows: PostResponse[] | Array<Record<string, unknown>> }>('/analytics/top-posts'),
     dataQualityTable: () => request<DataQualityTableAnalytics>('/analytics/data-quality-table'),
     demoStory: () => request<DemoStoryAnalytics>('/analytics/demo-story'),
+    drilldown: (payload: { kind: string; id: string | number }) =>
+      request<DrilldownResponse>(
+        `/analytics/drilldown${queryString({ kind: payload.kind, id: payload.id })}`,
+      ),
   },
   demo: {
     runWorkflow: (payload: { rows?: number; reset_demo?: boolean } = {}) =>
