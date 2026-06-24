@@ -5,6 +5,7 @@ import type {
   DataQualityAnalytics,
   DataQualityTableAnalytics,
   DashboardAnalytics,
+  DataJourneyAnalytics,
   DashboardSummary,
   DemoStoryAnalytics,
   DemoWorkflowRunResponse,
@@ -168,6 +169,10 @@ export const api = {
     topPosts: () => request<{ rows: PostResponse[] | Array<Record<string, unknown>> }>('/analytics/top-posts'),
     dataQualityTable: () => request<DataQualityTableAnalytics>('/analytics/data-quality-table'),
     demoStory: () => request<DemoStoryAnalytics>('/analytics/demo-story'),
+    dataJourney: (postId?: number) =>
+      request<DataJourneyAnalytics>(
+        `/analytics/data-journey${queryString({ post_id: postId })}`,
+      ),
     complianceSummary: () => request<ComplianceSummary>('/analytics/compliance-summary'),
     drilldown: (payload: { kind: string; id: string | number }) =>
       request<DrilldownResponse>(

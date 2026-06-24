@@ -207,6 +207,10 @@ def create_app(
     def analytics_demo_story():
         return queries.analytics_demo_story()
 
+    @app.get("/analytics/data-journey")
+    def analytics_data_journey(post_id: int | None = None):
+        return queries.analytics_data_journey(post_id=post_id)
+
     @app.get("/analytics/drilldown")
     def analytics_drilldown(kind: str, id: str):
         return queries.finalize_drilldown(queries.analytics_drilldown(kind=kind, item_id=id))

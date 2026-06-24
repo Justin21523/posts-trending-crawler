@@ -69,6 +69,7 @@ import type {
   DataQualityAnalytics,
   DataQualityTableAnalytics,
   DashboardAnalytics,
+  DataJourneyAnalytics,
   DashboardSummary,
   DemoStoryAnalytics,
   DemoStoryStep,
@@ -82,6 +83,7 @@ import type {
   KeywordAnalytics,
   KeywordInsightsAnalytics,
   KeywordNetworkAnalytics,
+  JourneyStep,
   LineageAnalytics,
   PlatformAnalytics,
   PostResponse,
@@ -112,6 +114,7 @@ type PageKey =
   | 'sources'
   | 'workflow'
   | 'lifecycle'
+  | 'journey'
   | 'runs'
   | 'explorer'
   | 'trends'
@@ -132,6 +135,7 @@ const pages: Array<{ key: PageKey; labelKey: string; icon: typeof Activity }> = 
   { key: 'sources', labelKey: 'page.sources', icon: Database },
   { key: 'workflow', labelKey: 'page.workflow', icon: GitBranch },
   { key: 'lifecycle', labelKey: 'page.lifecycle', icon: Route },
+  { key: 'journey', labelKey: 'page.journey', icon: Route },
   { key: 'runs', labelKey: 'page.runs', icon: Activity },
   { key: 'explorer', labelKey: 'page.explorer', icon: Search },
   { key: 'trends', labelKey: 'page.trends', icon: TrendingUp },
@@ -154,6 +158,7 @@ const pagePaths: Record<PageKey, string> = {
   sources: '/sources',
   workflow: '/workflow',
   lifecycle: '/lifecycle',
+  journey: '/journey',
   runs: '/runs',
   explorer: '/explorer',
   trends: '/trends',
@@ -176,6 +181,7 @@ const messages: Record<Language, Record<string, string>> = {
     'page.sources': '資料來源管理',
     'page.workflow': 'Crawler Workflow',
     'page.lifecycle': '資料生命週期',
+    'page.journey': 'Data Journey Studio',
     'page.runs': '爬取執行紀錄',
     'page.explorer': '資料瀏覽器',
     'page.trends': '趨勢分析',
@@ -220,6 +226,7 @@ const messages: Record<Language, Record<string, string>> = {
     'page.sources': 'Source Registry',
     'page.workflow': 'Crawler Workflow',
     'page.lifecycle': 'Data Lifecycle Story',
+    'page.journey': 'Data Journey Studio',
     'page.runs': 'Crawl Runs',
     'page.explorer': 'Data Explorer',
     'page.trends': 'Trend Analytics',
@@ -267,6 +274,20 @@ const tourSteps: Array<{
   body: Record<Language, string>;
   bullets: Record<Language, string[]>;
 }> = [
+  {
+    page: 'journey',
+    target: 'journey-studio',
+    i18nKey: 'journey',
+    title: { zh: '跟著一筆資料走完整流程', en: 'Follow one record through the pipeline' },
+    body: {
+      zh: '這裡把 raw record、清理、標準化、topic mining、趨勢分析和 Excel export 串成可視化旅程。',
+      en: 'This visualizes raw record, cleaning, normalization, topic mining, trend analytics, and Excel export.',
+    },
+    bullets: {
+      zh: ['點流程節點看資料變化', '右側顯示 before/after 與 artifacts'],
+      en: ['Click each flow node to inspect changes', 'The side panel shows before/after data and artifacts'],
+    },
+  },
   {
     page: 'overview',
     target: 'overview-kpis',
@@ -354,6 +375,7 @@ export function App() {
   const [crawlFlow, setCrawlFlow] = useState<CrawlFlowAnalytics | null>(null);
   const [dataQualityTable, setDataQualityTable] = useState<DataQualityTableAnalytics | null>(null);
   const [demoStory, setDemoStory] = useState<DemoStoryAnalytics | null>(null);
+  const [dataJourney, setDataJourney] = useState<DataJourneyAnalytics | null>(null);
   const [complianceSummary, setComplianceSummary] = useState<ComplianceSummary | null>(null);
   const [trends, setTrends] = useState<TrendAnalytics | null>(null);
   const [keywords, setKeywords] = useState<KeywordAnalytics | null>(null);
@@ -408,6 +430,7 @@ export function App() {
       ['crawlFlow', api.analytics.crawlFlow()],
       ['dataQualityTable', api.analytics.dataQualityTable()],
       ['demoStory', api.analytics.demoStory()],
+      ['dataJourney', api.analytics.dataJourney()],
       ['complianceSummary', api.analytics.complianceSummary()],
       ['trends', api.analytics.trends()],
       ['keywords', api.analytics.keywords()],
@@ -446,13 +469,14 @@ export function App() {
       const nextCrawlFlow = value<CrawlFlowAnalytics>(14);
       const nextDataQualityTable = value<DataQualityTableAnalytics>(15);
       const nextDemoStory = value<DemoStoryAnalytics>(16);
-      const nextComplianceSummary = value<ComplianceSummary>(17);
-      const nextTrends = value<TrendAnalytics>(18);
-      const nextKeywords = value<KeywordAnalytics>(19);
-      const nextEngagement = value<EngagementAnalytics>(20);
-      const nextPlatforms = value<PlatformAnalytics>(21);
-      const nextQuality = value<DataQualityAnalytics>(22);
-      const nextWorkflow = value<WorkflowSummary>(23);
+      const nextDataJourney = value<DataJourneyAnalytics>(17);
+      const nextComplianceSummary = value<ComplianceSummary>(18);
+      const nextTrends = value<TrendAnalytics>(19);
+      const nextKeywords = value<KeywordAnalytics>(20);
+      const nextEngagement = value<EngagementAnalytics>(21);
+      const nextPlatforms = value<PlatformAnalytics>(22);
+      const nextQuality = value<DataQualityAnalytics>(23);
+      const nextWorkflow = value<WorkflowSummary>(24);
       setSummary(nextSummary);
       setSources(nextSources ?? []);
       setSourceCatalog(nextSourceCatalog ?? []);
@@ -470,6 +494,7 @@ export function App() {
       setCrawlFlow(nextCrawlFlow);
       setDataQualityTable(nextDataQualityTable);
       setDemoStory(nextDemoStory);
+      setDataJourney(nextDataJourney);
       setComplianceSummary(nextComplianceSummary);
       setTrends(nextTrends);
       setKeywords(nextKeywords);
@@ -652,6 +677,7 @@ export function App() {
           open={assistantOpen}
           step={tourStep}
           language={language}
+          journey={dataJourney}
           onClose={() => setAssistantOpen(false)}
           onStepChange={(nextStep, page) => {
             setInsight(null);
@@ -751,6 +777,13 @@ export function App() {
           <LifecycleStoryPage
             graph={demoStory?.lifecycle ?? null}
             story={demoStory}
+            onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
+          />
+        );
+      case 'journey':
+        return (
+          <DataJourneyPage
+            journey={dataJourney}
             onDrilldown={(kind, id, fallback) => void openDrilldown(kind, id, fallback)}
           />
         );
@@ -861,6 +894,7 @@ function DemoAssistant({
   open,
   step,
   language,
+  journey,
   onClose,
   onStepChange,
   onOpen,
@@ -868,6 +902,7 @@ function DemoAssistant({
   open: boolean;
   step: number;
   language: Language;
+  journey: DataJourneyAnalytics | null;
   onClose: () => void;
   onStepChange: (step: number, page: PageKey) => void;
   onOpen: () => void;
@@ -907,9 +942,20 @@ function DemoAssistant({
   }
   const current = tourSteps[step];
   const isLast = step === tourSteps.length - 1;
-  const title = t(`assistant.steps.${current.i18nKey}Title`);
-  const body = t(`assistant.steps.${current.i18nKey}Body`);
-  const bullets = t(`assistant.steps.${current.i18nKey}Bullets`, { returnObjects: true }) as unknown as string[];
+  const titleKey = `assistant.steps.${current.i18nKey}Title`;
+  const bodyKey = `assistant.steps.${current.i18nKey}Body`;
+  const translatedTitle = t(titleKey);
+  const translatedBody = t(bodyKey);
+  const title = translatedTitle === titleKey ? current.title[language] : translatedTitle;
+  const body = translatedBody === bodyKey ? current.body[language] : translatedBody;
+  const rawBullets = t(`assistant.steps.${current.i18nKey}Bullets`, {
+    returnObjects: true,
+  }) as unknown;
+  const bullets = Array.isArray(rawBullets)
+    ? rawBullets.map(String)
+    : current.bullets[language];
+  const journeyStep = journey?.journey_steps.find((item) => item.target_page === current.page)
+    ?? journey?.journey_steps[step % Math.max(journey.journey_steps.length, 1)];
   return (
     <>
       <div className="tour-overlay" />
@@ -944,12 +990,25 @@ function DemoAssistant({
           </button>
         </div>
         <p>{body}</p>
+        {journeyStep && (
+          <div className="assistant-stage-card">
+            <span>{language === 'zh' ? journeyStep.title_zh : journeyStep.title}</span>
+            <strong>{String(journeyStep.metrics.artifact ?? 'processing artifact')}</strong>
+            <small>{language === 'zh' ? journeyStep.description_zh : journeyStep.description}</small>
+          </div>
+        )}
         <ul>
           {bullets.map((item) => <li key={item}>{item}</li>)}
         </ul>
         <div className="assistant-target">{t('assistant.target')}: {current.target}</div>
         <div className="assistant-actions">
           <button type="button" onClick={() => onStepChange(Math.max(step - 1, 0), tourSteps[Math.max(step - 1, 0)].page)} disabled={step === 0}>{t('assistant.prev')}</button>
+          <button
+            type="button"
+            onClick={() => document.querySelector(`[data-tour="${current.target}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+          >
+            跳到位置
+          </button>
           <button type="button" onClick={onClose}>{t('assistant.skip')}</button>
           <button
             className="primary-action"
@@ -1468,6 +1527,180 @@ function LifecycleStoryPage({
   );
 }
 
+function DataJourneyPage({
+  journey,
+  onDrilldown,
+}: {
+  journey: DataJourneyAnalytics | null;
+  onDrilldown: (kind: string, id: string, fallback?: Partial<DrilldownResponse>) => void;
+}) {
+  const { i18n } = useTranslation();
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const steps = journey?.journey_steps ?? [];
+  const selectedStep = steps.find((step) => step.id === selectedStepId) ?? steps[0] ?? null;
+  const nodes: Node[] = steps.map((step, index) => ({
+    id: step.id,
+    type: 'enhanced',
+    position: { x: (index % 3) * 270, y: Math.floor(index / 3) * 160 },
+    data: {
+      label: i18n.language === 'zh' ? step.title_zh : step.title,
+      label_zh: step.title_zh,
+      label_en: step.title,
+      status: step.status,
+      count: Number(step.metrics.count ?? 0),
+      purpose: i18n.language === 'zh' ? step.description_zh : step.description,
+      artifact: String(step.metrics.artifact ?? ''),
+    },
+  }));
+  const edges: Edge[] = steps.slice(0, -1).map((step, index) => ({
+    id: `${step.id}-${steps[index + 1].id}`,
+    source: step.id,
+    target: steps[index + 1].id,
+    animated: true,
+  }));
+  return (
+    <section className="journey-studio" data-tour="journey-studio">
+      <div className="panel wide-panel journey-hero">
+        <div>
+          <p className="eyebrow">Data Journey Studio</p>
+          <h2>跟著一筆公開資料走完整 pipeline</h2>
+          <p>{String(journey?.sample_post.title ?? 'Raw record to analytics and Excel export')}</p>
+        </div>
+        <button
+          className="primary-action"
+          type="button"
+          onClick={() => {
+            const id = journey?.sample_post.id;
+            if (id) onDrilldown('post', String(id), { metadata: journey.sample_post });
+          }}
+        >
+          <FileText size={16} />
+          查看文章 Detail
+        </button>
+      </div>
+      <div className="panel wide-panel journey-flow-panel">
+        <DataPacketAnimation steps={steps} selectedStepId={selectedStep?.id} />
+        <div className="journey-flow">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={graphNodeTypes}
+            fitView
+            onNodeClick={(_, node) => setSelectedStepId(node.id)}
+          >
+            <Background />
+            <Controls />
+          </ReactFlow>
+        </div>
+      </div>
+      <JourneyStepPanel step={selectedStep} />
+      <RecordDiffPanel diffs={journey?.record_diffs ?? []} />
+      <FieldMappingMatrix mappings={journey?.field_mappings ?? []} />
+      <TopicMatchPanel matches={journey?.topic_matches ?? []} />
+      <div className="panel">
+        <div className="panel-header"><h2>Export Artifacts</h2></div>
+        <div className="metadata-list">
+          {(journey?.export_artifacts ?? []).map((artifact) => (
+            <div className="metadata-row" key={`${artifact.type}-${artifact.path}-${artifact.sheet ?? ''}`}>
+              <strong>{String(artifact.type ?? 'artifact')}</strong>
+              <span>{String(artifact.sheet ?? artifact.path ?? '-')}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DataPacketAnimation({
+  steps,
+  selectedStepId,
+}: {
+  steps: JourneyStep[];
+  selectedStepId?: string;
+}) {
+  const activeIndex = Math.max(steps.findIndex((step) => step.id === selectedStepId), 0);
+  return (
+    <div className="data-packet-track" aria-label="Animated data packets">
+      {steps.map((step, index) => (
+        <span
+          className={index <= activeIndex ? 'data-packet active' : 'data-packet'}
+          key={step.id}
+          style={{ animationDelay: `${index * 120}ms` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function JourneyStepPanel({ step }: { step: JourneyStep | null }) {
+  if (!step) return <div className="panel"><div className="empty-state">No journey step.</div></div>;
+  return (
+    <aside className="panel journey-step-panel">
+      <div className="panel-header">
+        <h2>{step.title_zh}</h2>
+        <StatusBadge value={step.status} />
+      </div>
+      <p>{step.description_zh}</p>
+      <div className="metadata-list">
+        <div className="metadata-row"><strong>Target</strong><span>{step.target_page} / {step.target_selector}</span></div>
+        <div className="metadata-row"><strong>Count</strong><span>{String(step.metrics.count ?? 0)}</span></div>
+        <div className="metadata-row"><strong>Artifact</strong><span>{String(step.metrics.artifact ?? '-')}</span></div>
+      </div>
+      <pre className="json-panel">{JSON.stringify(step.output, null, 2)}</pre>
+    </aside>
+  );
+}
+
+function RecordDiffPanel({ diffs }: { diffs: DataJourneyAnalytics['record_diffs'] }) {
+  const diff = diffs[0];
+  return (
+    <div className="panel wide-panel" data-tour="journey-diff">
+      <div className="panel-header"><h2>Record Diff</h2><span className="pill">{diff?.stage ?? 'before / after'}</span></div>
+      <div className="record-diff-grid">
+        <pre className="json-panel">{JSON.stringify(diff?.before ?? {}, null, 2)}</pre>
+        <pre className="json-panel">{JSON.stringify(diff?.after ?? {}, null, 2)}</pre>
+      </div>
+    </div>
+  );
+}
+
+function FieldMappingMatrix({ mappings }: { mappings: DataJourneyAnalytics['field_mappings'] }) {
+  return (
+    <div className="panel" data-tour="journey-mapping">
+      <div className="panel-header"><h2>Field Mapping</h2></div>
+      <div className="metadata-list">
+        {mappings.map((mapping) => (
+          <div className="metadata-row" key={`${mapping.raw_field}-${mapping.normalized_field}`}>
+            <strong>{String(mapping.raw_field)}</strong>
+            <span>{String(mapping.normalized_field)} / {String(mapping.status)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TopicMatchPanel({ matches }: { matches: DataJourneyAnalytics['topic_matches'] }) {
+  return (
+    <div className="panel">
+      <div className="panel-header"><h2>Topic / Keyword Matches</h2></div>
+      <div className="topic-chip-grid">
+        {matches.map((match) => (
+          <span
+            className="topic-match-chip"
+            key={`${match.topic_id}-${match.keyword}`}
+            style={{ borderColor: String(match.color ?? '#64748b') }}
+          >
+            <strong>{String(match.keyword)}</strong>
+            <small>{String(match.topic_name)} · {String(match.match_count)}</small>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function StoryGraphPanel({
   graph,
   title,
@@ -1678,7 +1911,7 @@ function SourceRegistry({
 }) {
   const { t } = useTranslation();
   return (
-    <section className="page-grid">
+    <section className="page-grid" data-tour="source-registry">
       <SourceOverview
         sources={sources}
         summary={summary}
@@ -1707,7 +1940,7 @@ function SourceRegistry({
           </div>
         </div>
       </div>
-      <div className="panel wide-panel">
+      <div className="panel wide-panel" data-tour="trend-daily">
         <div className="panel-header">
           <h2>{t('source.catalog')}</h2>
           <span className="pill">{t('source.yamlTargets')}</span>
@@ -2343,7 +2576,7 @@ function QualityPage({
 
   return (
     <section className="page-grid analytics-grid">
-      <div className="panel wide-panel flow-panel lineage-panel">
+      <div className="panel wide-panel flow-panel lineage-panel" data-tour="quality-lineage">
         <div className="panel-header"><h2>{t('quality.lineage')}</h2></div>
         <ReactFlow
           nodeTypes={graphNodeTypes}

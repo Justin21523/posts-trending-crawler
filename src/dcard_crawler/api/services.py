@@ -1092,6 +1092,211 @@ class APIQueryService:
             ],
         }
 
+    def analytics_data_journey(self, post_id: int | None = None) -> dict[str, Any]:
+        """Return one sample post's end-to-end processing journey."""
+        with get_session() as session:
+            query = select(Post, Source.name).join(Source, Source.id == Post.source_id)
+            if post_id is not None:
+                query = query.where(Post.id == post_id)
+            else:
+                query = query.where(Post.content.is_not(None), Post.content != "").order_by(
+                    desc(Post.crawled_at)
+                )
+            row = session.execute(query.limit(1)).first()
+            if not row:
+                return {
+                    "sample_post": {},
+                    "journey_steps": [],
+                    "record_diffs": [],
+                    "field_mappings": [],
+                    "topic_matches": [],
+                    "export_artifacts": [],
+                }
+            post, source_name = row
+            related_jobs = self._related_jobs(session, post.source_id, limit=3)
+        normalized = self._post_response_dict(post, source_name)
+        raw_record = post.raw_json or {
+            "external_id": post.external_id,
+            "title": post.title,
+            "content": post.content,
+            "source": source_name,
+        }
+        parsed_record = {
+            "title": post.title,
+            "excerpt": post.excerpt,
+            "content": post.content,
+            "published_at": post.published_at,
+            "board_or_forum": post.board_or_forum,
+        }
+        cleaned_record = {
+            **parsed_record,
+            "content": " ".join((post.content or "").split()),
+            "title": " ".join(post.title.split()),
+        }
+        matches = classify_text(
+            " ".join([post.title or "", post.excerpt or "", post.content or ""])
+        )
+        topic_matches = [
+            {
+                "topic_id": match["topic_id"],
+                "topic_name": match["topic_name"],
+                "keyword": match["keyword"],
+                "match_count": match["match_count"],
+                "color": match["color"],
+            }
+            for match in sorted(matches, key=lambda item: item["match_count"], reverse=True)[:12]
+        ]
+        export_artifacts = [
+            {"type": "xlsx", "path": "data/exports/analysis_report.xlsx", "sheet": "Raw Data"},
+            {
+                "type": "xlsx",
+                "path": "data/exports/analysis_report.xlsx",
+                "sheet": "Keyword Matches",
+            },
+            {"type": "json", "path": "data/reports/crawl_runs/demo_seed_crawl_report.json"},
+        ]
+        field_mappings = [
+            {"raw_field": "id/external_id", "normalized_field": "external_id", "status": "mapped"},
+            {"raw_field": "forum/board", "normalized_field": "board_or_forum", "status": "mapped"},
+            {"raw_field": "body/content", "normalized_field": "content", "status": "cleaned"},
+            {
+                "raw_field": "createdAt/published",
+                "normalized_field": "published_at",
+                "status": "parsed",
+            },
+            {
+                "raw_field": "metrics",
+                "normalized_field": "like/comment/view counts",
+                "status": "normalized",
+            },
+            {"raw_field": "url", "normalized_field": "canonical_url", "status": "mapped"},
+        ]
+        steps = [
+            self._journey_step(
+                "raw_source",
+                "Raw Source",
+                "原始資料",
+                "Capture the public source record and provenance.",
+                "擷取公開來源資料與 provenance。",
+                "sources",
+                "source-registry",
+                len(json.dumps(raw_record, ensure_ascii=False)),
+                "raw_json",
+                raw_record,
+            ),
+            self._journey_step(
+                "policy_check",
+                "Policy Check",
+                "合規檢查",
+                "Confirm public-data, robots, and fail-closed conditions.",
+                "確認 public data、robots 與 fail-closed 條件。",
+                "compliance",
+                "compliance-summary",
+                len(related_jobs),
+                "crawl_jobs",
+                {"related_jobs": related_jobs},
+            ),
+            self._journey_step(
+                "parse",
+                "Parse",
+                "解析",
+                "Extract title, content, board, time, and URL fields.",
+                "解析 title、content、board、time 與 URL 欄位。",
+                "workflow",
+                "workflow-graph",
+                len(parsed_record),
+                "parser output",
+                parsed_record,
+            ),
+            self._journey_step(
+                "clean",
+                "Clean",
+                "清理",
+                "Trim whitespace and expose content quality flags.",
+                "清理空白並標示內容品質旗標。",
+                "journey",
+                "journey-diff",
+                len(cleaned_record["content"] or ""),
+                "cleaned record",
+                cleaned_record,
+            ),
+            self._journey_step(
+                "normalize",
+                "Normalize",
+                "標準化",
+                "Map platform-specific fields into the shared post schema.",
+                "把平台欄位映射到共用文章 schema。",
+                "journey",
+                "journey-mapping",
+                len(field_mappings),
+                "posts table",
+                normalized,
+            ),
+            self._journey_step(
+                "dedupe",
+                "Dedupe",
+                "去重",
+                "Use content hash to detect duplicate normalized records.",
+                "使用 content hash 偵測重複資料。",
+                "quality",
+                "quality-lineage",
+                1 if post.content_hash else 0,
+                "content_hash",
+                {"content_hash": post.content_hash, "duplicate": False},
+            ),
+            self._journey_step(
+                "topic_mining",
+                "Topic Mining",
+                "主題分析",
+                "Match taxonomy keywords and build topic evidence.",
+                "比對 taxonomy keywords 並建立 topic evidence。",
+                "keywords",
+                "keyword-network",
+                len(topic_matches),
+                "topic matches",
+                {"topic_matches": topic_matches},
+            ),
+            self._journey_step(
+                "trend_analytics",
+                "Trend Analytics",
+                "趨勢分析",
+                "Aggregate the post into daily, platform, and board charts.",
+                "把文章聚合到 daily、platform 與 board 圖表。",
+                "trends",
+                "trend-daily",
+                1,
+                "analytics charts",
+                {
+                    "date": self._date_key(post.published_at or post.created_at),
+                    "platform": post.platform,
+                },
+            ),
+            self._journey_step(
+                "excel_export",
+                "Excel Export",
+                "Excel 輸出",
+                "Package summary, raw data, keywords, trends, and quality sheets.",
+                "封裝 summary、raw data、keywords、trends 與 quality sheets。",
+                "reports",
+                "report-center",
+                len(export_artifacts),
+                "Excel workbook",
+                {"artifacts": export_artifacts},
+            ),
+        ]
+        return {
+            "sample_post": normalized,
+            "journey_steps": steps,
+            "record_diffs": [
+                {"stage": "raw_to_parsed", "before": raw_record, "after": parsed_record},
+                {"stage": "parsed_to_cleaned", "before": parsed_record, "after": cleaned_record},
+                {"stage": "cleaned_to_normalized", "before": cleaned_record, "after": normalized},
+            ],
+            "field_mappings": field_mappings,
+            "topic_matches": topic_matches,
+            "export_artifacts": export_artifacts,
+        }
+
     def analytics_top_posts(self) -> dict[str, Any]:
         """Return top post table rows."""
         with get_session() as session:
@@ -1957,6 +2162,36 @@ class APIQueryService:
             "url": post.url,
             "canonical_url": post.canonical_url,
             "content_hash": post.content_hash,
+        }
+
+    @staticmethod
+    def _journey_step(
+        step_id: str,
+        title: str,
+        title_zh: str,
+        description: str,
+        description_zh: str,
+        target_page: str,
+        target_selector: str,
+        count: int,
+        artifact: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "id": step_id,
+            "title": title,
+            "title_zh": title_zh,
+            "description": description,
+            "description_zh": description_zh,
+            "status": "completed",
+            "target_page": target_page,
+            "target_selector": target_selector,
+            "visual_type": "flow_node",
+            "input": {"source": "previous step" if step_id != "raw_source" else "public source"},
+            "output": payload,
+            "metrics": {"count": count, "artifact": artifact},
+            "artifacts": [artifact],
+            "quality_flags": [],
         }
 
     def _related_posts(

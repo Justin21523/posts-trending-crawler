@@ -246,6 +246,7 @@ def test_api_visualization_endpoints_after_demo_seed(tmp_path, monkeypatch):
     crawl_flow = client.get("/analytics/crawl-flow")
     top_posts = client.get("/analytics/top-posts")
     quality_table = client.get("/analytics/data-quality-table")
+    journey = client.get("/analytics/data-journey")
 
     assert dashboard.status_code == 200
     assert dashboard.json()["daily_platform_volume"]
@@ -265,6 +266,12 @@ def test_api_visualization_endpoints_after_demo_seed(tmp_path, monkeypatch):
     assert crawl_flow.json()["nodes"][1]["data"]["compliance"]
     assert top_posts.json()["rows"]
     assert "missing_content" in quality_table.json()
+    assert journey.status_code == 200
+    assert len(journey.json()["journey_steps"]) >= 9
+    assert journey.json()["sample_post"]["id"]
+    assert journey.json()["topic_matches"]
+    assert journey.json()["export_artifacts"]
+    assert journey.json()["journey_steps"][0]["target_page"]
 
 
 def test_api_demo_story_and_run_workflow(tmp_path, monkeypatch):

@@ -392,6 +392,36 @@ export type DemoWorkflowRunResponse = {
   summary: Record<string, unknown>;
 };
 
+export type JourneyStep = {
+  id: string;
+  title: string;
+  title_zh: string;
+  description: string;
+  description_zh: string;
+  status: string;
+  target_page: string;
+  target_selector: string;
+  visual_type: string;
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  metrics: Record<string, unknown>;
+  artifacts: string[];
+  quality_flags: string[];
+};
+
+export type DataJourneyAnalytics = {
+  sample_post: Record<string, unknown>;
+  journey_steps: JourneyStep[];
+  record_diffs: Array<{
+    stage: string;
+    before: Record<string, unknown>;
+    after: Record<string, unknown>;
+  }>;
+  field_mappings: Array<Record<string, unknown>>;
+  topic_matches: Array<Record<string, unknown>>;
+  export_artifacts: Array<Record<string, unknown>>;
+};
+
 export type DrilldownResponse = {
   kind: string;
   id: string;
