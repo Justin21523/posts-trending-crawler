@@ -14,6 +14,32 @@ export type SourceResponse = {
   updated_at: string;
 };
 
+export type SourceCatalogEntryStatus = {
+  name: string;
+  display_name: string;
+  platform: string;
+  source_type: string;
+  strategy: string;
+  enabled: boolean;
+  base_url: string | null;
+  target_url: string | null;
+  board: string | null;
+  robots_url: string | null;
+  default_max_items: number;
+  default_max_pages: number;
+  allow_robots_unavailable: boolean;
+  allow_over18_public_confirm: boolean;
+  notes: string | null;
+  tags: string[];
+  group: string;
+  database_source_id: number | null;
+  database_backed: boolean;
+  post_count: number;
+  latest_job: Record<string, unknown> | null;
+  last_status: string | null;
+  last_error: string | null;
+};
+
 export type PostResponse = {
   id: number;
   source: string;

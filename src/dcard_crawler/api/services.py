@@ -20,6 +20,7 @@ from dcard_crawler.services.factory import (
     build_ptt_ingest_service,
 )
 from dcard_crawler.services.live_verification import LiveVerificationService
+from dcard_crawler.services.source_catalog import load_source_catalog
 
 
 class APIQueryService:
@@ -33,6 +34,54 @@ class APIQueryService:
         """Return all configured data sources."""
         with get_session() as session:
             return list(session.execute(select(Source).order_by(Source.name)).scalars().all())
+
+    def source_catalog_status(self, catalog_path: str | None = None) -> list[dict[str, Any]]:
+        """Return catalog entries merged with current SQLite status."""
+        catalog = load_source_catalog(catalog_path)
+        entries = catalog.entries
+        with get_session() as session:
+            source_rows = {
+                source.name: source
+                for source in session.execute(select(Source)).scalars().all()
+            }
+            post_counts = {
+                source_name: int(count)
+                for source_name, count in session.execute(
+                    select(Source.name, func.count(Post.id))
+                    .join(Post, Post.source_id == Source.id, isouter=True)
+                    .group_by(Source.name)
+                ).all()
+            }
+            latest_jobs: dict[str, CrawlJob] = {}
+            for entry in entries:
+                source = source_rows.get(entry.name)
+                if not source:
+                    continue
+                latest = session.execute(
+                    select(CrawlJob)
+                    .where(CrawlJob.source_id == source.id)
+                    .order_by(desc(CrawlJob.started_at))
+                    .limit(1)
+                ).scalar_one_or_none()
+                if latest:
+                    latest_jobs[entry.name] = latest
+
+        response = []
+        for entry in entries:
+            source = source_rows.get(entry.name)
+            latest = latest_jobs.get(entry.name)
+            response.append(
+                {
+                    **entry.model_dump(),
+                    "database_source_id": source.id if source else None,
+                    "database_backed": source is not None,
+                    "post_count": post_counts.get(entry.name, 0),
+                    "latest_job": self._job_dict(latest, entry.name) if latest else None,
+                    "last_status": latest.status if latest else None,
+                    "last_error": latest.error_reason if latest else None,
+                }
+            )
+        return response
 
     def list_posts(
         self,

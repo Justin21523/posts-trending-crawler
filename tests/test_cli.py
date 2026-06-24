@@ -290,6 +290,50 @@ def test_news_help_commands_run():
     assert runner.invoke(app, ["crawl-news-article", "--help"]).exit_code == 0
 
 
+def test_batch_crawl_help_commands_run():
+    runner = CliRunner()
+
+    assert runner.invoke(app, ["crawl-sources", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["crawl-source-group", "--help"]).exit_code == 0
+
+
+def test_batch_crawl_dry_run_uses_catalog_without_live_network(tmp_path):
+    catalog_path = tmp_path / "sources.yaml"
+    catalog_path.write_text(
+        """
+groups:
+  news:
+    - name: local-news
+      display_name: Local News
+      platform: news
+      source_type: news
+      strategy: rss
+      enabled: true
+      base_url: https://news.example.com
+      target_url: https://news.example.com/rss.xml
+      default_max_items: 5
+      default_max_pages: 1
+""",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "crawl-sources",
+            "--source",
+            "local-news",
+            "--catalog",
+            str(catalog_path),
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Dry run finished" in result.output
+    assert "local-news" in result.output
+
+
 def test_verify_live_help_commands_run():
     runner = CliRunner()
 

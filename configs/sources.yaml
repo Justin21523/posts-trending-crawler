@@ -1,0 +1,253 @@
+groups:
+  news:
+    - name: cna-technology
+      display_name: CNA Technology
+      platform: news
+      source_type: news
+      strategy: rss
+      enabled: true
+      base_url: https://www.cna.com.tw
+      target_url: https://feeds.feedburner.com/rsscna/technology
+      robots_url: https://www.cna.com.tw/robots.txt
+      default_max_items: 50
+      default_max_pages: 1
+      notes: Official public RSS feed.
+      tags: [news, rss, technology]
+    - name: cna-finance
+      display_name: CNA Finance
+      platform: news
+      source_type: news
+      strategy: rss
+      enabled: true
+      base_url: https://www.cna.com.tw
+      target_url: https://feeds.feedburner.com/rsscna/finance
+      robots_url: https://www.cna.com.tw/robots.txt
+      default_max_items: 50
+      default_max_pages: 1
+      notes: Official public RSS feed.
+      tags: [news, rss, finance]
+    - name: cna-lifehealth
+      display_name: CNA Life Health
+      platform: news
+      source_type: news
+      strategy: rss
+      enabled: true
+      base_url: https://www.cna.com.tw
+      target_url: https://feeds.feedburner.com/rsscna/lifehealth
+      robots_url: https://www.cna.com.tw/robots.txt
+      default_max_items: 50
+      default_max_pages: 1
+      notes: Official public RSS feed.
+      tags: [news, rss, life]
+    - name: yahoo-stock-news
+      display_name: Yahoo Stock News
+      platform: news
+      source_type: news
+      strategy: rss
+      enabled: true
+      base_url: https://tw.stock.yahoo.com
+      target_url: https://tw.stock.yahoo.com/rss?category=news
+      robots_url: https://tw.stock.yahoo.com/robots.txt
+      default_max_items: 50
+      default_max_pages: 1
+      notes: Yahoo Taiwan stock public RSS.
+      tags: [news, rss, stock]
+    - name: yahoo-tw-market
+      display_name: Yahoo Taiwan Market
+      platform: news
+      source_type: news
+      strategy: rss
+      enabled: true
+      base_url: https://tw.stock.yahoo.com
+      target_url: https://tw.stock.yahoo.com/rss?category=tw-market
+      robots_url: https://tw.stock.yahoo.com/robots.txt
+      default_max_items: 50
+      default_max_pages: 1
+      notes: Yahoo Taiwan market public RSS.
+      tags: [news, rss, market]
+    - name: yahoo-intl-markets
+      display_name: Yahoo International Markets
+      platform: news
+      source_type: news
+      strategy: rss
+      enabled: true
+      base_url: https://tw.stock.yahoo.com
+      target_url: https://tw.stock.yahoo.com/rss?category=intl-markets
+      robots_url: https://tw.stock.yahoo.com/robots.txt
+      default_max_items: 50
+      default_max_pages: 1
+      notes: Yahoo international markets public RSS.
+      tags: [news, rss, market]
+    - name: technews-main
+      display_name: TechNews Main
+      platform: news
+      source_type: news
+      strategy: rss
+      enabled: true
+      base_url: https://technews.tw
+      target_url: https://technews.tw/feed/
+      robots_url: https://technews.tw/robots.txt
+      default_max_items: 50
+      default_max_pages: 1
+      notes: Public RSS feed.
+      tags: [news, rss, technology]
+    - name: technews-3c
+      display_name: TechNews 3C
+      platform: news
+      source_type: news
+      strategy: rss
+      enabled: true
+      base_url: https://ccc.technews.tw
+      target_url: https://ccc.technews.tw/feed/
+      robots_url: https://ccc.technews.tw/robots.txt
+      default_max_items: 50
+      default_max_pages: 1
+      notes: Public RSS feed.
+      tags: [news, rss, 3c]
+    - name: inside-rss
+      display_name: INSIDE RSS
+      platform: news
+      source_type: news
+      strategy: rss
+      enabled: true
+      base_url: https://www.inside.com.tw
+      target_url: https://www.inside.com.tw/feed/rss
+      robots_url: https://www.inside.com.tw/robots.txt
+      default_max_items: 50
+      default_max_pages: 1
+      notes: Public RSS feed.
+      tags: [news, rss, technology]
+    - name: bnext-rss-candidate
+      display_name: Business Next RSS Candidate
+      platform: news
+      source_type: news
+      strategy: rss
+      enabled: false
+      base_url: https://www.bnext.com.tw
+      target_url: https://www.bnext.com.tw/rss
+      robots_url: https://www.bnext.com.tw/robots.txt
+      default_max_items: 20
+      default_max_pages: 1
+      notes: Disabled because the candidate RSS URL returned 404 during planning.
+      tags: [news, rss, candidate]
+  ptt:
+    - name: ptt-stock
+      display_name: PTT Stock
+      platform: ptt
+      source_type: forum
+      strategy: ptt_board
+      enabled: true
+      base_url: https://www.ptt.cc
+      board: Stock
+      robots_url: https://www.ptt.cc/robots.txt
+      default_max_items: 50
+      default_max_pages: 2
+      allow_robots_unavailable: true
+      allow_over18_public_confirm: false
+      notes: Public board, low-volume portfolio crawl.
+      tags: [ptt, stock]
+    - name: ptt-tech-job
+      display_name: PTT Tech Job
+      platform: ptt
+      source_type: forum
+      strategy: ptt_board
+      enabled: true
+      base_url: https://www.ptt.cc
+      board: Tech_Job
+      robots_url: https://www.ptt.cc/robots.txt
+      default_max_items: 50
+      default_max_pages: 2
+      allow_robots_unavailable: true
+      allow_over18_public_confirm: false
+      notes: Public board, low-volume portfolio crawl.
+      tags: [ptt, career]
+    - name: ptt-soft-job
+      display_name: PTT Soft Job
+      platform: ptt
+      source_type: forum
+      strategy: ptt_board
+      enabled: true
+      base_url: https://www.ptt.cc
+      board: Soft_Job
+      robots_url: https://www.ptt.cc/robots.txt
+      default_max_items: 50
+      default_max_pages: 2
+      allow_robots_unavailable: true
+      allow_over18_public_confirm: false
+      notes: Public board, low-volume portfolio crawl.
+      tags: [ptt, career]
+    - name: ptt-nba
+      display_name: PTT NBA
+      platform: ptt
+      source_type: forum
+      strategy: ptt_board
+      enabled: true
+      base_url: https://www.ptt.cc
+      board: NBA
+      robots_url: https://www.ptt.cc/robots.txt
+      default_max_items: 50
+      default_max_pages: 2
+      allow_robots_unavailable: true
+      allow_over18_public_confirm: false
+      notes: Public board, low-volume portfolio crawl.
+      tags: [ptt, sports]
+    - name: ptt-baseball
+      display_name: PTT Baseball
+      platform: ptt
+      source_type: forum
+      strategy: ptt_board
+      enabled: true
+      base_url: https://www.ptt.cc
+      board: Baseball
+      robots_url: https://www.ptt.cc/robots.txt
+      default_max_items: 50
+      default_max_pages: 2
+      allow_robots_unavailable: true
+      allow_over18_public_confirm: false
+      notes: Public board, low-volume portfolio crawl.
+      tags: [ptt, sports]
+    - name: ptt-pc-shopping
+      display_name: PTT PC Shopping
+      platform: ptt
+      source_type: forum
+      strategy: ptt_board
+      enabled: true
+      base_url: https://www.ptt.cc
+      board: PC_Shopping
+      robots_url: https://www.ptt.cc/robots.txt
+      default_max_items: 50
+      default_max_pages: 2
+      allow_robots_unavailable: true
+      allow_over18_public_confirm: false
+      notes: Public board, low-volume portfolio crawl.
+      tags: [ptt, hardware]
+    - name: ptt-mobilecomm
+      display_name: PTT MobileComm
+      platform: ptt
+      source_type: forum
+      strategy: ptt_board
+      enabled: true
+      base_url: https://www.ptt.cc
+      board: MobileComm
+      robots_url: https://www.ptt.cc/robots.txt
+      default_max_items: 50
+      default_max_pages: 2
+      allow_robots_unavailable: true
+      allow_over18_public_confirm: false
+      notes: Public board, low-volume portfolio crawl.
+      tags: [ptt, mobile]
+    - name: ptt-gossiping-candidate
+      display_name: PTT Gossiping Candidate
+      platform: ptt
+      source_type: forum
+      strategy: ptt_board
+      enabled: false
+      base_url: https://www.ptt.cc
+      board: Gossiping
+      robots_url: https://www.ptt.cc/robots.txt
+      default_max_items: 5
+      default_max_pages: 1
+      allow_robots_unavailable: false
+      allow_over18_public_confirm: false
+      notes: Disabled by default because it may require age confirmation and stricter review.
+      tags: [ptt, candidate]

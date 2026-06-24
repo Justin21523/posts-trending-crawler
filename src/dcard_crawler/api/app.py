@@ -47,6 +47,10 @@ def create_app(
     def sources():
         return queries.list_sources()
 
+    @app.get("/source-catalog")
+    def source_catalog():
+        return queries.source_catalog_status()
+
     @app.get("/summary", response_model=DashboardSummary)
     def summary():
         recent_jobs = [

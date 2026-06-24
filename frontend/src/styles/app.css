@@ -1,6 +1,20 @@
 :root {
-  color: #172033;
-  background: #f5f7fb;
+  --color-primary: #2563eb;
+  --color-primary-soft: #dbeafe;
+  --color-secondary: #0f766e;
+  --color-secondary-soft: #ccfbf1;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fef3c7;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fee2e2;
+  --color-bg: #f8fafc;
+  --color-panel: #ffffff;
+  --color-border: #dbe3ef;
+  --color-text: #0f172a;
+  --color-muted: #64748b;
+  --shadow-panel: 0 8px 20px rgba(15, 23, 42, 0.06);
+  color: var(--color-text);
+  background: var(--color-bg);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
@@ -14,7 +28,7 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #f5f7fb;
+  background: var(--color-bg);
 }
 
 button,
@@ -25,8 +39,8 @@ select {
 
 button {
   border: 1px solid #c9d3e5;
-  background: #ffffff;
-  color: #172033;
+  background: var(--color-panel);
+  color: var(--color-text);
   cursor: pointer;
 }
 
@@ -36,7 +50,7 @@ button:disabled {
 }
 
 a {
-  color: #1455d9;
+  color: var(--color-primary);
   text-decoration: none;
 }
 
@@ -55,8 +69,8 @@ a:hover {
   top: 0;
   height: 100vh;
   padding: 18px 14px;
-  border-right: 1px solid #d8e0ee;
-  background: #ffffff;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-panel);
   overflow-y: auto;
 }
 
@@ -74,20 +88,20 @@ a:hover {
   height: 42px;
   place-items: center;
   border-radius: 8px;
-  background: #1455d9;
+  background: var(--color-primary);
   color: #ffffff;
   font-weight: 900;
 }
 
 .brand-block p {
   margin: 0 0 2px;
-  color: #667085;
+  color: var(--color-muted);
   font-size: 12px;
 }
 
 .brand-block strong {
   display: block;
-  color: #121927;
+  color: var(--color-text);
   font-size: 14px;
   line-height: 1.25;
 }
@@ -107,7 +121,7 @@ a:hover {
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #42506a;
+  color: #334155;
   text-align: left;
 }
 
@@ -118,8 +132,8 @@ a:hover {
 
 .sidebar-nav button:hover,
 .sidebar-nav button.active {
-  background: #eef4ff;
-  color: #1455d9;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 
 .content-shell {
@@ -137,7 +151,7 @@ a:hover {
 
 .eyebrow {
   margin: 0 0 4px;
-  color: #5b6475;
+  color: var(--color-muted);
   font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
@@ -150,7 +164,7 @@ h2 {
 }
 
 h1 {
-  color: #121927;
+  color: var(--color-text);
   font-size: 30px;
   line-height: 1.15;
 }
@@ -168,7 +182,7 @@ h2 {
 
 .api-status {
   max-width: 320px;
-  color: #42506a;
+  color: #334155;
   font-size: 14px;
   text-align: right;
 }
@@ -190,10 +204,10 @@ h2 {
 
 .metric-card,
 .panel {
-  border: 1px solid #d8e0ee;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 8px 20px rgba(28, 39, 64, 0.05);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-panel);
 }
 
 .metric-card {
@@ -210,18 +224,18 @@ h2 {
   height: 38px;
   place-items: center;
   border-radius: 8px;
-  background: #eef4ff;
-  color: #1f5fbf;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 
 .metric-label {
-  color: #667085;
+  color: var(--color-muted);
   font-size: 13px;
 }
 
 .metric-value {
   margin-top: 3px;
-  color: #121927;
+  color: var(--color-text);
   font-size: 24px;
   font-weight: 800;
 }
@@ -330,21 +344,25 @@ h2 {
 .status-completed,
 .status-passed,
 .status-ready {
-  color: #05603a;
-  background: #dcfae6;
+  color: var(--color-secondary);
+  background: var(--color-secondary-soft);
 }
 
 .status-failed,
 .status-forbidden,
-.status-robots-disallowed {
-  color: #b42318;
-  background: #fee4e2;
+.status-http-403-forbidden,
+.status-robots-disallowed,
+.status-policy-blocked {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
 }
 
 .status-completed-with-warnings,
-.status-warning {
-  color: #93370d;
-  background: #ffead5;
+.status-warning,
+.status-http-429-rate-limited,
+.status-robots-unavailable-opt-in {
+  color: #92400e;
+  background: var(--color-warning-soft);
 }
 
 .job-title {
@@ -353,7 +371,7 @@ h2 {
 
 .job-error {
   margin-top: 4px;
-  color: #b42318;
+  color: var(--color-danger);
   font-size: 13px;
 }
 
@@ -428,15 +446,15 @@ h2 {
   gap: 8px;
   min-height: 34px;
   padding: 6px 10px;
-  border: 1px solid #d8e0ee;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   background: #fbfcff;
-  color: #172033;
+  color: var(--color-text);
   font-weight: 700;
 }
 
 .keyword-chip strong {
-  color: #1f7a5f;
+  color: var(--color-secondary);
 }
 
 .ranked-list,
@@ -453,7 +471,7 @@ h2 {
   gap: 12px;
   min-height: 48px;
   padding: 10px 12px;
-  border: 1px solid #e4e9f2;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   background: #fbfcff;
 }
@@ -472,13 +490,94 @@ h2 {
 
 .ranked-row span,
 .metadata-row span {
-  color: #667085;
+  color: var(--color-muted);
   font-size: 13px;
   overflow-wrap: anywhere;
 }
 
 .ranked-row b {
-  color: #1f7a5f;
+  color: var(--color-secondary);
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.catalog-card {
+  display: grid;
+  gap: 10px;
+  min-height: 168px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.catalog-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.catalog-title div {
+  min-width: 0;
+}
+
+.catalog-title strong,
+.catalog-title span {
+  display: block;
+}
+
+.catalog-title .status {
+  flex: 0 0 auto;
+  min-width: 96px;
+  white-space: nowrap;
+}
+
+.catalog-title strong,
+.catalog-title span,
+.catalog-card p,
+.catalog-card small {
+  overflow-wrap: anywhere;
+}
+
+.catalog-title span,
+.catalog-card p,
+.catalog-card small {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.catalog-card p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.catalog-card small {
+  color: var(--color-danger);
+}
+
+.catalog-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.catalog-meta span {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.status-catalog-ready {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
 }
 
 .workflow-grid {
@@ -705,6 +804,7 @@ td p {
   .summary-grid,
   .dashboard-grid,
   .page-grid,
+  .catalog-grid,
   .source-layout,
   .filters,
   .workflow-grid {

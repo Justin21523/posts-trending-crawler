@@ -107,6 +107,18 @@ def test_api_health_sources_posts_and_jobs(tmp_path, monkeypatch):
     assert cors.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
+def test_api_source_catalog_merges_database_status(tmp_path, monkeypatch):
+    seed_db(tmp_path, monkeypatch)
+    client = TestClient(create_app(control_service=FakeControlService()))
+
+    response = client.get("/source-catalog")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert any(item["name"] == "cna-technology" for item in payload)
+    assert all("database_backed" in item for item in payload)
+
+
 def test_api_reports_reads_json_summaries(tmp_path, monkeypatch):
     seed_db(tmp_path, monkeypatch)
     report_dir = tmp_path / "data" / "reports" / "crawl_runs"

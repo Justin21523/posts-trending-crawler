@@ -40,6 +40,7 @@ import type {
   PlatformAnalytics,
   PostResponse,
   ReportSummary,
+  SourceCatalogEntryStatus,
   SourceResponse,
   TrendAnalytics,
   VerifyResponse,
@@ -95,6 +96,7 @@ export function App() {
   const [quality, setQuality] = useState<DataQualityAnalytics | null>(null);
   const [workflow, setWorkflow] = useState<WorkflowSummary | null>(null);
   const [sources, setSources] = useState<SourceResponse[]>([]);
+  const [sourceCatalog, setSourceCatalog] = useState<SourceCatalogEntryStatus[]>([]);
   const [posts, setPosts] = useState<PostResponse[]>([]);
   const [jobs, setJobs] = useState<CrawlJobResponse[]>([]);
   const [reports, setReports] = useState<ReportSummary[]>([]);
@@ -108,6 +110,7 @@ export function App() {
       const [
         nextSummary,
         nextSources,
+        nextSourceCatalog,
         nextJobs,
         nextReports,
         nextOverview,
@@ -120,6 +123,7 @@ export function App() {
       ] = await Promise.all([
         api.summary(),
         api.sources(),
+        api.sourceCatalog(),
         api.jobs(),
         api.reports(),
         api.analytics.overview(),
@@ -132,6 +136,7 @@ export function App() {
       ]);
       setSummary(nextSummary);
       setSources(nextSources);
+      setSourceCatalog(nextSourceCatalog);
       setJobs(nextJobs);
       setReports(nextReports);
       setOverview(nextOverview);
@@ -238,7 +243,7 @@ export function App() {
           </>
         );
       case 'sources':
-        return <SourceRegistry sources={sources} summary={summary} />;
+        return <SourceRegistry sources={sources} catalog={sourceCatalog} summary={summary} />;
       case 'workflow':
         return <WorkflowPage workflow={workflow} />;
       case 'runs':
@@ -373,20 +378,60 @@ function OverviewDashboard({
   );
 }
 
-function SourceRegistry({ sources, summary }: { sources: SourceResponse[]; summary: DashboardSummary | null }) {
+function SourceRegistry({
+  sources,
+  catalog,
+  summary,
+}: {
+  sources: SourceResponse[];
+  catalog: SourceCatalogEntryStatus[];
+  summary: DashboardSummary | null;
+}) {
   return (
-    <section className="dashboard-grid">
+    <section className="page-grid">
       <SourceOverview sources={sources} summary={summary} />
       <div className="panel">
         <div className="panel-header">
-          <h2>Governance Fields</h2>
+          <h2>Catalog Summary</h2>
         </div>
         <div className="metadata-list">
-          {sources.map((source) => (
-            <div className="metadata-row" key={source.id}>
-              <strong>{source.name}</strong>
-              <span>{source.source_type} / {source.enabled ? 'enabled' : 'disabled'}</span>
-              <span>{source.robots_url ?? 'robots not configured'}</span>
+          <div className="metadata-row">
+            <strong>Configured Sources</strong>
+            <span>{catalog.length}</span>
+          </div>
+          <div className="metadata-row">
+            <strong>Enabled Sources</strong>
+            <span>{catalog.filter((source) => source.enabled).length}</span>
+          </div>
+          <div className="metadata-row">
+            <strong>Database-backed</strong>
+            <span>{catalog.filter((source) => source.database_backed).length}</span>
+          </div>
+        </div>
+      </div>
+      <div className="panel wide-panel">
+        <div className="panel-header">
+          <h2>Source Catalog</h2>
+          <span className="pill">YAML-driven batch crawl targets</span>
+        </div>
+        <div className="catalog-grid">
+          {catalog.map((source) => (
+            <div className="catalog-card" key={source.name}>
+              <div className="catalog-title">
+                <div>
+                  <strong>{source.display_name}</strong>
+                  <span>{source.name}</span>
+                </div>
+                <StatusBadge value={source.last_status ?? (source.enabled ? 'catalog_ready' : 'disabled')} />
+              </div>
+              <div className="catalog-meta">
+                <span>{source.group}</span>
+                <span>{source.platform}</span>
+                <span>{source.strategy}</span>
+                <span>{source.post_count} posts</span>
+              </div>
+              <p>{source.board ?? source.target_url ?? source.base_url}</p>
+              {source.last_error && <small>{source.last_error}</small>}
             </div>
           ))}
         </div>

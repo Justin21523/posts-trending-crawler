@@ -33,6 +33,11 @@ KEYWORD_OPTION = typer.Option(
     "--keyword",
     help="Inline keyword. Can be passed multiple times.",
 )
+SOURCE_OPTION = typer.Option(
+    None,
+    "--source",
+    help="Catalog source name. Can be passed multiple times.",
+)
 
 
 def _require_current_schema() -> bool:
@@ -674,6 +679,126 @@ def crawl_news_article(
         target_type="article",
         max_articles=1,
     )
+
+
+def _print_batch_report(report: dict) -> None:
+    """Print a concise batch crawl summary."""
+    summary = report["summary"]
+    label = "Dry run" if report.get("dry_run") else "Batch crawl"
+    typer.echo(f"\n✓ {label} finished")
+    typer.echo(f"  Sources: {summary['total']}")
+    typer.echo(f"  Completed: {summary['completed']}")
+    typer.echo(f"  Failed: {summary['failed']}")
+    typer.echo(f"  Stored: {summary['items_stored']}")
+    typer.echo(f"  Requests: {summary['request_count']}")
+    if report.get("report_path"):
+        typer.echo(f"  Report: {report['report_path']}")
+    typer.echo("  Results:")
+    for result in report["results"]:
+        target = result.get("target") or result.get("job_id") or "-"
+        typer.echo(
+            f"    - {result['source']}: status={result['status']} "
+            f"stored={result.get('items_stored', 0)} target={target}"
+        )
+
+
+@app.command("crawl-sources")
+def crawl_sources(
+    source: list[str] | None = SOURCE_OPTION,
+    max_items_per_source: int = typer.Option(
+        50,
+        "--max-items-per-source",
+        min=1,
+        max=100,
+        help="Maximum items to store per source.",
+    ),
+    max_pages: int = typer.Option(
+        2,
+        "--max-pages",
+        min=1,
+        max=3,
+        help="Maximum PTT listing pages per source.",
+    ),
+    catalog: str = typer.Option(
+        "configs/sources.yaml",
+        "--catalog",
+        help="Source catalog YAML path.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="List selected catalog sources without making requests.",
+    ),
+):
+    """Crawl one or more explicitly selected catalog sources."""
+    from dcard_crawler.services.batch_crawl import BatchCrawlService
+
+    if not source:
+        typer.echo("✗ Provide at least one --source, or use crawl-source-group.")
+        raise typer.Exit(1)
+    if not dry_run and not _require_current_schema():
+        raise typer.Exit(1)
+
+    async def _run():
+        report = await BatchCrawlService(catalog_path=catalog).crawl(
+            source_names=source,
+            max_items_per_source=max_items_per_source,
+            max_pages=max_pages,
+            dry_run=dry_run,
+        )
+        _print_batch_report(report)
+
+    asyncio.run(_run())
+
+
+@app.command("crawl-source-group")
+def crawl_source_group(
+    group: str = typer.Option(
+        ...,
+        "--group",
+        help="Catalog group name such as news or ptt.",
+    ),
+    max_items_per_source: int = typer.Option(
+        50,
+        "--max-items-per-source",
+        min=1,
+        max=100,
+        help="Maximum items to store per source.",
+    ),
+    max_pages: int = typer.Option(
+        2,
+        "--max-pages",
+        min=1,
+        max=3,
+        help="Maximum PTT listing pages per source.",
+    ),
+    catalog: str = typer.Option(
+        "configs/sources.yaml",
+        "--catalog",
+        help="Source catalog YAML path.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="List selected catalog sources without making requests.",
+    ),
+):
+    """Crawl all enabled sources in a catalog group."""
+    from dcard_crawler.services.batch_crawl import BatchCrawlService
+
+    if not dry_run and not _require_current_schema():
+        raise typer.Exit(1)
+
+    async def _run():
+        report = await BatchCrawlService(catalog_path=catalog).crawl(
+            group=group,
+            max_items_per_source=max_items_per_source,
+            max_pages=max_pages,
+            dry_run=dry_run,
+        )
+        _print_batch_report(report)
+
+    asyncio.run(_run())
 
 
 def _print_verify_report(report: dict) -> None:
