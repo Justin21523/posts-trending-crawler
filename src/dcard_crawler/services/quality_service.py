@@ -24,7 +24,7 @@ class QualityService:
         if not post.title or not post.title.strip():
             issues.append("title is empty")
 
-        if not post.post_id:
+        if post.platform == "dcard" and not post.post_id:
             issues.append("post_id is missing")
 
         if not post.external_id:
@@ -43,8 +43,13 @@ class QualityService:
 
         # Check URL consistency
         if post.url:
-            if not post.url.startswith("https://www.dcard.tw/"):
-                issues.append(f"invalid URL format: {post.url}")
+            expected_prefixes = {
+                "dcard": "https://www.dcard.tw/",
+                "ptt": "https://www.ptt.cc/",
+            }
+            expected_prefix = expected_prefixes.get(post.platform)
+            if expected_prefix and not post.url.startswith(expected_prefix):
+                issues.append(f"invalid URL format for {post.platform}: {post.url}")
             if post.forum_alias and post.forum_alias not in post.url:
                 logger.debug(f"forum_alias '{post.forum_alias}' not found in URL: {post.url}")
 

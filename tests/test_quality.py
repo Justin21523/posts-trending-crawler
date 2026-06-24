@@ -58,6 +58,24 @@ class TestQualityService:
         assert is_valid is False
         assert "post_id is missing" in issues
 
+    def test_ptt_post_without_post_id_is_valid(self):
+        """PTT uses external_id rather than Dcard post_id."""
+        post = NormalizedPost(
+            source_name="ptt",
+            platform="ptt",
+            external_id="M.1700000000.A.123",
+            title="PTT title",
+            content="PTT content with sufficient length",
+            created_at="2024-01-01T12:00:00Z",
+            url="https://www.ptt.cc/bbs/Stock/M.1700000000.A.123.html",
+            raw_json={"id": "M.1700000000.A.123"},
+        )
+
+        is_valid, issues = self.service.validate(post)
+
+        assert is_valid is True
+        assert "post_id is missing" not in issues
+
     def test_empty_content_and_excerpt_fails(self):
         """Test that empty content and excerpt fails validation."""
         post = NormalizedPost(

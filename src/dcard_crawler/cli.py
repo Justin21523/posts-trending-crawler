@@ -15,7 +15,7 @@ from dcard_crawler.core.http_client import CrawlerHttpClient
 from dcard_crawler.core.rate_limiter import DomainRateLimiter
 from dcard_crawler.database import init_db, is_current_schema
 from dcard_crawler.services.checkpoint_service import CheckpointService
-from dcard_crawler.services.factory import build_ingest_service
+from dcard_crawler.services.factory import build_ingest_service, build_ptt_ingest_service
 from dcard_crawler.settings import settings
 
 app = typer.Typer(
@@ -461,6 +461,64 @@ def crawl_dcard_posts(
         resume=resume,
         label="Dcard post crawl",
     )
+
+
+@app.command()
+def crawl_ptt(
+    board: str = typer.Option(
+        "Stock",
+        "--board",
+        "-b",
+        help="PTT board name to crawl",
+    ),
+    max_pages: int = typer.Option(
+        1,
+        "--max-pages",
+        help="Maximum listing pages to fetch",
+    ),
+    max_posts: int | None = typer.Option(
+        20,
+        "--max-posts",
+        "-m",
+        help="Maximum posts to store",
+    ),
+    allow_over18_public_confirm: bool = typer.Option(
+        False,
+        "--allow-over18-public-confirm",
+        help="Use PTT public over18 confirmation flow for this session only",
+    ),
+):
+    """Crawl public PTT board articles."""
+    if not _require_current_schema():
+        raise typer.Exit(1)
+
+    typer.echo(f"Starting PTT crawl: board={board} max_pages={max_pages} max_posts={max_posts}")
+
+    async def _run():
+        service = build_ptt_ingest_service(
+            board=board,
+            allow_over18_public_confirm=allow_over18_public_confirm,
+        )
+        try:
+            target = service.connector.board_target(board)
+            stats = await service.crawl_target(
+                target,
+                max_pages=max_pages,
+                max_posts=max_posts,
+                fetch_details=True,
+                source_base_url="https://www.ptt.cc",
+                robots_url="https://www.ptt.cc/robots.txt",
+            )
+            typer.echo("\n✓ PTT crawl completed!")
+            typer.echo(f"  Items listed: {stats['items_listed']}")
+            typer.echo(f"  Items detailed: {stats['items_detailed']}")
+            typer.echo(f"  Items stored: {stats['items_stored']}")
+            typer.echo(f"  Items skipped: {stats['items_skipped']}")
+            typer.echo(f"  Errors: {stats['errors']}")
+        finally:
+            await service.close()
+
+    asyncio.run(_run())
 
 
 @app.command()

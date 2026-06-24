@@ -45,7 +45,7 @@ class NormalizedPost(BaseModel):
     source_type: str = "forum"
     platform: str = "dcard"
     external_id: str | None = None
-    post_id: int
+    post_id: int | None = None
     forum_alias: str | None = None
     forum_name: str | None = None
     board_or_forum: str | None = None
@@ -80,7 +80,7 @@ class NormalizedPost(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         """Fill compatibility defaults after validation."""
-        if self.external_id is None:
+        if self.external_id is None and self.post_id is not None:
             self.external_id = str(self.post_id)
         if self.board_or_forum is None:
             self.board_or_forum = self.forum_alias

@@ -16,6 +16,7 @@ from dcard_crawler.settings import settings
 
 class FakeIngestService:
     calls = []
+    connector = None
 
     async def crawl_posts(self, **kwargs):
         self.calls.append(kwargs)
@@ -29,6 +30,28 @@ class FakeIngestService:
 
     async def close(self):
         return None
+
+    async def crawl_target(self, target, **kwargs):
+        self.calls.append({"target": target, **kwargs})
+        return {
+            "items_listed": 1,
+            "items_detailed": 1,
+            "items_stored": 1,
+            "items_skipped": 0,
+            "errors": 0,
+        }
+
+
+class FakePttConnector:
+    @staticmethod
+    def board_target(board):
+        from dcard_crawler.connectors.base import ConnectorTarget
+
+        return ConnectorTarget(url=f"https://www.ptt.cc/bbs/{board}/index.html", label=board)
+
+
+class FakePttIngestService(FakeIngestService):
+    connector = FakePttConnector()
 
 
 def test_init_reset_creates_current_schema(tmp_path, monkeypatch):
@@ -117,6 +140,20 @@ def test_discover_and_verify_dcard_help_commands_run():
 
     assert discover_result.exit_code == 0
     assert verify_result.exit_code == 0
+
+
+def test_crawl_ptt_uses_service_factory_without_live_network(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings.database, "url", f"sqlite:///{tmp_path / 'crawler.db'}")
+    init_db(reset=True)
+    fake_service = FakePttIngestService()
+    fake_service.calls = []
+    monkeypatch.setattr("dcard_crawler.cli.build_ptt_ingest_service", lambda **kwargs: fake_service)
+
+    result = CliRunner().invoke(app, ["crawl-ptt", "--board", "Stock", "--max-pages", "1"])
+
+    assert result.exit_code == 0
+    assert "PTT crawl completed" in result.output
+    assert fake_service.calls[0]["target"].label == "Stock"
 
 
 def test_status_shows_recent_crawl_jobs(tmp_path, monkeypatch):

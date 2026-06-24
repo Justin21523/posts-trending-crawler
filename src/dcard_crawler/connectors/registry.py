@@ -2,6 +2,7 @@
 
 from dcard_crawler.connectors.base import BaseConnector
 from dcard_crawler.connectors.dcard import DcardConnector
+from dcard_crawler.connectors.ptt import PttConnector
 
 
 class ConnectorRegistry:
@@ -37,4 +38,4 @@ class ConnectorRegistry:
 
 def default_registry() -> ConnectorRegistry:
     """Create the default connector registry."""
-    return ConnectorRegistry([DcardConnector()])
+    return ConnectorRegistry([DcardConnector(), PttConnector()])
