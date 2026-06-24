@@ -37,8 +37,16 @@ import type {
 } from './types';
 
 const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8000';
+
+function sameOriginApiBaseUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+  return `${window.location.origin}${basePath}/api`;
+}
+
 const API_BASE_CANDIDATES = [
   import.meta.env.VITE_API_BASE_URL,
+  sameOriginApiBaseUrl(),
   DEFAULT_API_BASE_URL,
   'http://127.0.0.1:8001',
   'http://localhost:8000',
