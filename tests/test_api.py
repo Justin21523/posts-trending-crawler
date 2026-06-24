@@ -17,8 +17,17 @@ from dcard_crawler.settings import settings
 
 class FakeControlService:
     def run_demo_workflow(self, **kwargs):
+        rows = kwargs.get("rows", 120)
+        if rows > 1000:
+            return {
+                "posts_inserted": rows,
+                "sources_inserted": 3,
+                "jobs_inserted": 0,
+                "reports_inserted": 0,
+                "mode": "parameter_validation_only",
+            }
         return DemoSeedService().seed(
-            rows=kwargs.get("rows", 120),
+            rows=rows,
             reset_demo=kwargs.get("reset_demo", True),
         )
 
@@ -30,6 +39,7 @@ class FakeControlService:
         return {
             "status": "completed",
             "output_path": output_path,
+            "download_url": f"/reports/download?path={output_path}",
             "row_count": len(tables["Raw Data"]),
             "keyword_match_count": len(tables["Keyword Matches"]),
             "sheets": list(tables),
@@ -255,12 +265,15 @@ def test_api_demo_story_and_run_workflow(tmp_path, monkeypatch):
     client = TestClient(create_app(control_service=FakeControlService()))
 
     run = client.post("/demo/workflow/run", params={"rows": 120, "reset_demo": True})
+    run_large = client.post("/demo/workflow/run", params={"rows": 10000, "reset_demo": True})
     story = client.get("/analytics/demo-story")
     posts = client.get("/posts", params={"source": "demo-ptt", "limit": 5})
 
     assert run.status_code == 200
     assert run.json()["status"] == "completed"
     assert run.json()["stats"]["posts_inserted"] == 120
+    assert run_large.status_code == 200
+    assert run_large.json()["stats"]["posts_inserted"] == 10000
     assert story.status_code == 200
     assert story.json()["walkthrough_steps"][0]["label"] == "Source Select"
     assert story.json()["architecture"]["nodes"]
@@ -333,6 +346,16 @@ def test_api_compliance_excel_and_metadata_payloads(tmp_path, monkeypatch):
     assert compliance.json()["governance_rules"]
     assert report.status_code == 200
     assert report.json()["status"] == "completed"
+    assert report.json()["download_url"].startswith("/reports/download")
+    download = client.get(report.json()["download_url"])
+    blocked_download = client.get("/reports/download", params={"path": "pyproject.toml"})
+    assert download.status_code == 200
+    assert download.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert blocked_download.status_code == 403
     assert (tmp_path / "data" / "exports" / "test_report.xlsx").exists()
     assert drilldown.json()["metadata_status"] == "available"
     assert drilldown.json()["available_fields"]
+    assert drilldown.json()["related_posts"]
+    assert drilldown.json()["related_jobs"]

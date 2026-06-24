@@ -382,6 +382,7 @@ export type ComplianceSummary = {
 export type ExcelReportRunResponse = {
   status: string;
   output_path: string;
+  download_url: string;
   row_count: number;
   keyword_match_count: number;
   sheets: string[];

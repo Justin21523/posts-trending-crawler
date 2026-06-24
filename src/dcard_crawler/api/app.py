@@ -1,7 +1,10 @@
 """FastAPI app factory for crawler portfolio UI."""
 
-from fastapi import FastAPI, Query
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from dcard_crawler.api.schemas import (
     CrawlJobResponse,
@@ -211,13 +214,22 @@ def create_app(
     ):
         return controls.generate_excel_report(output_path=output)
 
+    @app.get("/reports/download")
+    def download_report(path: str = Query(...)):
+        report_path = _safe_report_path(path)
+        return FileResponse(
+            report_path,
+            filename=report_path.name,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
     @app.get("/workflow/summary")
     def workflow_summary():
         return queries.workflow_summary()
 
     @app.post("/demo/workflow/run")
     def run_demo_workflow(
-        rows: int = Query(2000, ge=100, le=5000),
+        rows: int = Query(10000, ge=100, le=10000),
         reset_demo: bool = True,
     ):
         stats = controls.run_demo_workflow(rows=rows, reset_demo=reset_demo)
@@ -274,6 +286,19 @@ def create_app(
         }
 
     return app
+
+
+def _safe_report_path(path: str) -> Path:
+    requested = Path(path)
+    if requested.is_absolute():
+        raise HTTPException(status_code=400, detail="Absolute paths are not allowed")
+    resolved = requested.resolve()
+    allowed_roots = [Path("data/exports").resolve(), Path("data/reports").resolve()]
+    if not any(resolved == root or root in resolved.parents for root in allowed_roots):
+        raise HTTPException(status_code=403, detail="Report path is not downloadable")
+    if not resolved.exists() or not resolved.is_file():
+        raise HTTPException(status_code=404, detail="Report file not found")
+    return resolved
 
 
 def _post_response(post, source_name: str) -> dict:

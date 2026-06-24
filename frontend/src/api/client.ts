@@ -126,12 +126,13 @@ export const api = {
         `/reports/excel${queryString({ output: payload.output ?? 'data/exports/analysis_report.xlsx' })}`,
         { method: 'POST' },
       ),
+    downloadUrl: (path: string) => `${API_BASE_URL}/reports/download${queryString({ path })}`,
   },
   demo: {
     runWorkflow: (payload: { rows?: number; reset_demo?: boolean } = {}) =>
       request<DemoWorkflowRunResponse>(
         `/demo/workflow/run${queryString({
-          rows: payload.rows ?? 2000,
+          rows: payload.rows ?? 10000,
           reset_demo: payload.reset_demo === undefined ? 'true' : String(payload.reset_demo),
         })}`,
         { method: 'POST' },

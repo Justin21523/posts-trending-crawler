@@ -37,9 +37,10 @@ import {
   TrendingUp,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { select, zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3';
 import {
   Area,
   AreaChart,
@@ -537,7 +538,7 @@ export function App() {
     setDemoRunning(true);
     setStatus('Generating demo workflow dataset...');
     try {
-      await refreshAfterRun(api.demo.runWorkflow({ rows: 2000, reset_demo: true }));
+      await refreshAfterRun(api.demo.runWorkflow({ rows: 10000, reset_demo: true }));
       setStatus('Demo workflow ready');
       setDemoMode(true);
       setActivePage('demo');
@@ -1868,6 +1869,11 @@ function KeywordBubbleMap({
   selectedKeyword?: string;
   onNodeClick: (node: KeywordNetworkAnalytics['nodes'][number]) => void;
 }) {
+  const { t } = useTranslation();
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const viewportRef = useRef<SVGGElement | null>(null);
+  const zoomBehaviorRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const nodes = (network?.nodes ?? []).slice(0, 18);
   const links = network?.links ?? [];
   const width = 900;
@@ -1891,65 +1897,94 @@ function KeywordBubbleMap({
   });
   const byId = new Map(positioned.map((node) => [node.id, node]));
 
+  useEffect(() => {
+    if (!svgRef.current || !viewportRef.current) return;
+    const behavior = zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.7, 3.2])
+      .on('zoom', (event: { transform: ZoomTransform }) => {
+        select(viewportRef.current).attr('transform', event.transform.toString());
+        setZoomLevel(Number(event.transform.k.toFixed(2)));
+      });
+    zoomBehaviorRef.current = behavior;
+    select(svgRef.current).call(behavior);
+    return () => {
+      select(svgRef.current).on('.zoom', null);
+    };
+  }, [nodes.length]);
+
+  function resetZoom() {
+    if (!svgRef.current || !zoomBehaviorRef.current) return;
+    select(svgRef.current).transition().duration(220).call(zoomBehaviorRef.current.transform, zoomIdentity);
+  }
+
   return (
-    <svg className="keyword-bubble-map" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Keyword co-occurrence bubble map">
-      <defs>
-        <filter id="bubbleShadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#0f172a" floodOpacity="0.18" />
-        </filter>
-      </defs>
-      <g className="bubble-links">
-        {links.slice(0, 40).map((link) => {
-          const source = byId.get(String(link.source));
-          const target = byId.get(String(link.target));
-          if (!source || !target) return null;
-          return (
-            <line
-              key={`${link.source}-${link.target}`}
-              x1={source.x}
-              y1={source.y}
-              x2={target.x}
-              y2={target.y}
-              strokeWidth={Math.max(1, Math.min(7, link.value))}
-            />
-          );
-        })}
-      </g>
-      <g className="bubble-nodes">
-        {positioned.map((node) => {
-          const lines = wrapBubbleLabel(node.label, node.radius);
-          const selected = selectedKeyword === node.id;
-          return (
-            <g
-              className={selected ? 'keyword-bubble selected' : 'keyword-bubble'}
-              key={node.id}
-              role="button"
-              tabIndex={0}
-              transform={`translate(${node.x} ${node.y})`}
-              onClick={() => onNodeClick(node)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') onNodeClick(node);
-              }}
-            >
-              <circle r={node.radius} fill={node.color ?? '#2563eb'} />
-              <circle className="bubble-ring" r={node.radius + 4} />
-              <text textAnchor="middle" dominantBaseline="middle">
-                {lines.map((line, index) => (
-                  <tspan
-                    x="0"
-                    dy={index === 0 ? `${-(lines.length - 1) * 9}` : '18'}
-                    key={line}
-                  >
-                    {line}
-                  </tspan>
-                ))}
-              </text>
-              <text className="bubble-count" textAnchor="middle" y={node.radius - 14}>{node.value}</text>
-            </g>
-          );
-        })}
-      </g>
-    </svg>
+    <div className="bubble-map-shell">
+      <div className="bubble-toolbar">
+        <button type="button" onClick={resetZoom}>{t('keyword.resetView')}</button>
+        <span>{t('keyword.zoomLevel')}: {Math.round(zoomLevel * 100)}%</span>
+      </div>
+      <svg ref={svgRef} className="keyword-bubble-map" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Keyword co-occurrence bubble map">
+        <defs>
+          <filter id="bubbleShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#0f172a" floodOpacity="0.18" />
+          </filter>
+        </defs>
+        <g ref={viewportRef}>
+          <g className="bubble-links">
+            {links.slice(0, 40).map((link) => {
+              const source = byId.get(String(link.source));
+              const target = byId.get(String(link.target));
+              if (!source || !target) return null;
+              return (
+                <line
+                  key={`${link.source}-${link.target}`}
+                  x1={source.x}
+                  y1={source.y}
+                  x2={target.x}
+                  y2={target.y}
+                  strokeWidth={Math.max(1, Math.min(7, link.value))}
+                />
+              );
+            })}
+          </g>
+          <g className="bubble-nodes">
+            {positioned.map((node) => {
+              const lines = wrapBubbleLabel(node.label, node.radius);
+              const selected = selectedKeyword === node.id;
+              return (
+                <g
+                  className={selected ? 'keyword-bubble selected' : 'keyword-bubble'}
+                  key={node.id}
+                  role="button"
+                  tabIndex={0}
+                  transform={`translate(${node.x} ${node.y})`}
+                  onClick={() => onNodeClick(node)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') onNodeClick(node);
+                  }}
+                >
+                  <title>{node.insight_summary ?? node.label}</title>
+                  <circle r={node.radius} fill={node.color ?? '#2563eb'} />
+                  <circle className="bubble-ring" r={node.radius + 4} />
+                  <text textAnchor="middle" dominantBaseline="middle">
+                    {lines.map((line, index) => (
+                      <tspan
+                        x="0"
+                        dy={index === 0 ? `${-(lines.length - 1) * 9}` : '18'}
+                        key={line}
+                      >
+                        {line}
+                      </tspan>
+                    ))}
+                  </text>
+                  <text className="bubble-count" textAnchor="middle" y={node.radius - 14}>{node.value}</text>
+                </g>
+              );
+            })}
+          </g>
+        </g>
+      </svg>
+    </div>
   );
 }
 
@@ -2272,9 +2307,20 @@ function ReportsCenter({
             <FileSpreadsheet size={16} />
             {running ? t('reports.generating') : t('reports.generate')}
           </button>
+          {lastRun?.download_url && (
+            <a
+              className="demo-toggle"
+              href={api.reportsApi.downloadUrl(lastRun.output_path)}
+              download
+            >
+              <FileSpreadsheet size={16} />
+              {t('reports.download')}
+            </a>
+          )}
         </div>
         <div className="metadata-list">
           <div className="metadata-row"><strong>{t('reports.output')}</strong><span>{lastRun?.output_path ?? 'data/exports/analysis_report.xlsx'}</span></div>
+          <div className="metadata-row"><strong>{t('reports.status')}</strong><span>{lastRun?.download_url ? t('reports.downloadReady') : '-'}</span></div>
           <div className="metadata-row"><strong>{t('reports.rows')}</strong><span>{lastRun?.row_count ?? '-'}</span></div>
           <div className="metadata-row"><strong>{t('reports.matches')}</strong><span>{lastRun?.keyword_match_count ?? '-'}</span></div>
         </div>

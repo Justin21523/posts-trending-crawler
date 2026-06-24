@@ -216,11 +216,11 @@ def serve_api(
 @app.command("seed-demo-data")
 def seed_demo_data(
     rows: int = typer.Option(
-        2000,
+        10000,
         "--rows",
         help="Number of demo posts/articles to generate for portfolio preview.",
         min=100,
-        max=5000,
+        max=10000,
     ),
     reset_demo: bool = typer.Option(
         False,

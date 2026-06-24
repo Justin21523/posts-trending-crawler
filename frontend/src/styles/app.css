@@ -1208,6 +1208,41 @@ h2 {
   overflow: hidden;
 }
 
+.bubble-map-shell {
+  position: relative;
+}
+
+.bubble-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+}
+
+.bubble-toolbar button {
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.bubble-toolbar span {
+  min-width: 76px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
 .keyword-bubble-map {
   width: 100%;
   height: min(520px, 58vw);
@@ -1217,6 +1252,12 @@ h2 {
   background:
     radial-gradient(circle at 50% 45%, rgba(37, 99, 235, 0.08), transparent 34%),
     linear-gradient(180deg, #ffffff, #f8fafc);
+  cursor: grab;
+  touch-action: none;
+}
+
+.keyword-bubble-map:active {
+  cursor: grabbing;
 }
 
 .bubble-links line {

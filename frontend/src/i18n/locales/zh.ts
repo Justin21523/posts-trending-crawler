@@ -191,6 +191,8 @@ export const zh = {
     evidencePosts: '證據文章',
     platformDistribution: '平台分布',
     boardDistribution: '看板 / 分類分布',
+    resetView: '重設視圖',
+    zoomLevel: '縮放',
   },
   status: {
     completed: '已完成',
@@ -226,6 +228,9 @@ export const zh = {
     generator: 'Excel 報表產生器',
     generate: '產生 Excel 報表',
     generating: '產生中...',
+    download: '下載 Excel',
+    downloadReady: '報表已可下載',
+    status: '狀態',
     output: '輸出路徑',
     rows: '資料筆數',
     matches: '關鍵字命中',

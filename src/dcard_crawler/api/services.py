@@ -1203,6 +1203,19 @@ class APIQueryService:
         metadata = payload.get("metadata") or {}
         if not isinstance(metadata, dict):
             metadata = {"value": metadata}
+        related_posts = payload.get("related_posts") or []
+        related_jobs = payload.get("related_jobs") or []
+        fallback_notes: list[str] = []
+        if not related_posts:
+            related_posts = self.search_posts(limit=8)["rows"]
+            fallback_notes.append("related_posts_fallback_latest")
+        if not related_jobs:
+            related_jobs = self.analytics_overview()["latest_jobs"]
+            fallback_notes.append("related_jobs_fallback_latest")
+        payload["related_posts"] = related_posts
+        payload["related_jobs"] = related_jobs
+        if fallback_notes:
+            metadata = {**metadata, "fallback_related_data": fallback_notes}
         available = sorted(str(key) for key, value in metadata.items() if value not in (None, ""))
         missing = sorted(str(key) for key, value in metadata.items() if value in (None, ""))
         if not available:
@@ -1912,6 +1925,12 @@ class APIQueryService:
                     for row in self.analytics_source_health()["rows"]
                     if row["platform"] == platform
                 ],
+                "keyword_distribution": [
+                    item
+                    for item in self.analytics_keywords()["by_platform"]
+                    if item["platform"] == platform
+                ],
+                "top_posts": rows,
             },
             "related_posts": rows,
             "related_jobs": self.analytics_overview()["latest_jobs"],
@@ -2178,7 +2197,7 @@ class APIControlService:
             sample_post_id=sample_post_id,
         )
 
-    def run_demo_workflow(self, *, rows: int = 2000, reset_demo: bool = True) -> dict[str, Any]:
+    def run_demo_workflow(self, *, rows: int = 10000, reset_demo: bool = True) -> dict[str, Any]:
         """Seed demo data for the interactive portfolio walkthrough."""
         from dcard_crawler.services.demo_seed import DemoSeedService
 
@@ -2197,6 +2216,7 @@ class APIControlService:
         return {
             "status": "completed",
             "output_path": str(path),
+            "download_url": f"/reports/download?path={path.as_posix()}",
             "row_count": int(len(tables.get("Raw Data", []))),
             "keyword_match_count": int(len(tables.get("Keyword Matches", []))),
             "sheets": list(tables),

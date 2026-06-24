@@ -191,6 +191,8 @@ export const en = {
     evidencePosts: 'Evidence posts',
     platformDistribution: 'Platform distribution',
     boardDistribution: 'Board / forum distribution',
+    resetView: 'Reset view',
+    zoomLevel: 'Zoom',
   },
   status: {
     completed: 'completed',
@@ -226,6 +228,9 @@ export const en = {
     generator: 'Excel Report Generator',
     generate: 'Generate Excel Report',
     generating: 'Generating...',
+    download: 'Download Excel',
+    downloadReady: 'Report is ready to download',
+    status: 'Status',
     output: 'Output',
     rows: 'Rows',
     matches: 'Keyword Matches',
