@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
 from playwright.sync_api import Page, expect, sync_playwright
 
 BASE_URL = os.getenv("PORTFOLIO_UI_BASE_URL", "http://127.0.0.1:5176").rstrip("/")
+SEED_DEMO_DATA = os.getenv("PORTFOLIO_UI_SEED_DEMO_DATA", "1") != "0"
+DEMO_ROWS = int(os.getenv("PORTFOLIO_UI_DEMO_ROWS", "10000"))
 OUTPUT_ROOT = Path("docs/demo")
 SCREENSHOT_DIR = OUTPUT_ROOT / "screenshots"
 VIDEO_DIR = OUTPUT_ROOT / "videos"
 VIEWPORT = {"width": 1440, "height": 1000}
+READY_ENDPOINT_COUNT = "25/25 endpoints ready"
+IGNORED_CONSOLE_ERROR_PARTS = (
+    "favicon",
+    "net::ERR_NETWORK_CHANGED",
+)
 
 PAGES = [
     ("overview", "/overview", '[data-tour="overview-kpis"]'),
@@ -43,10 +51,37 @@ def reset_output_dirs() -> None:
         path.mkdir(parents=True, exist_ok=True)
 
 
+def ensure_demo_dataset() -> None:
+    """Seed a reproducible demo dataset before screenshot/video capture."""
+    if not SEED_DEMO_DATA:
+        return
+
+    subprocess.run(["dcard-crawler", "init"], check=True)
+    subprocess.run(
+        [
+            "dcard-crawler",
+            "seed-demo-data",
+            "--rows",
+            str(DEMO_ROWS),
+            "--reset-demo",
+        ],
+        check=True,
+    )
+
+
+def wait_demo_data_ready(page: Page) -> None:
+    """Wait until the app has rendered API-backed demo data, not just shells."""
+    expect(page.get_by_text("API ready").first).to_be_visible(timeout=180_000)
+    expect(page.get_by_text(READY_ENDPOINT_COUNT).first).to_be_visible(timeout=180_000)
+    expect(page.locator(".loading-strip")).to_have_count(0, timeout=60_000)
+    expect(page.get_by_text("Demo dataset", exact=False).first).to_be_visible(timeout=60_000)
+    page.wait_for_timeout(900)
+
+
 def wait_ready(page: Page, selector: str) -> None:
     page.wait_for_load_state("domcontentloaded")
     expect(page.locator(selector).first).to_be_visible(timeout=30_000)
-    page.wait_for_timeout(500)
+    wait_demo_data_ready(page)
 
 
 def capture_segments(page: Page, name: str, selector: str) -> list[str]:
@@ -132,6 +167,7 @@ def run_detail_routes(page: Page) -> None:
 
 
 def main() -> None:
+    ensure_demo_dataset()
     reset_output_dirs()
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -156,7 +192,8 @@ def main() -> None:
         page.on(
             "console",
             lambda msg: console_errors.append(msg.text)
-            if msg.type == "error" and "favicon" not in msg.text.lower()
+            if msg.type == "error"
+            and not any(part.lower() in msg.text.lower() for part in IGNORED_CONSOLE_ERROR_PARTS)
             else None,
         )
 

@@ -252,6 +252,9 @@ recorded walkthrough.
 The verification covers all core sidebar pages, long-page segmented screenshots,
 the floating guided assistant, Data Journey visualization, Guided Pipeline sample
 and upload preview, report/detail routes, and fatal browser error detection.
+Before capture, the script seeds a reproducible demo dataset so screenshots and
+the walkthrough video always show full charts, tables, metadata, and detail
+panels instead of partially loaded API shells.
 
 ```bash
 conda activate data_env
@@ -264,6 +267,16 @@ VITE_API_BASE_URL=http://127.0.0.1:8100 npm run dev -- --host 127.0.0.1 --port 5
 conda activate data_env
 PORTFOLIO_UI_BASE_URL=http://127.0.0.1:5189 python scripts/verify_portfolio_ui.py
 ```
+
+The verifier runs:
+
+```bash
+dcard-crawler init
+dcard-crawler seed-demo-data --rows 10000 --reset-demo
+```
+
+Set `PORTFOLIO_UI_SEED_DEMO_DATA=0` only when you intentionally want to capture
+the current live SQLite state without reseeding demo records.
 
 ## Architecture
 

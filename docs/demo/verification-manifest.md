@@ -1,23 +1,23 @@
 # Portfolio UI Verification Manifest
 
 - architecture-map: docs/demo/screenshots/architecture-map-01.png, docs/demo/screenshots/architecture-map-02.png
-- compliance-diagnostics: docs/demo/screenshots/compliance-diagnostics-01.png
-- crawl-runs: docs/demo/screenshots/crawl-runs-01.png
+- compliance-diagnostics: docs/demo/screenshots/compliance-diagnostics-01.png, docs/demo/screenshots/compliance-diagnostics-02.png, docs/demo/screenshots/compliance-diagnostics-03.png
+- crawl-runs: docs/demo/screenshots/crawl-runs-01.png, docs/demo/screenshots/crawl-runs-02.png, docs/demo/screenshots/crawl-runs-03.png
 - crawler-workflow: docs/demo/screenshots/crawler-workflow-01.png
-- data-explorer: docs/demo/screenshots/data-explorer-01.png
-- data-journey: docs/demo/screenshots/data-journey-01.png, docs/demo/screenshots/data-journey-02.png
+- data-explorer: docs/demo/screenshots/data-explorer-01.png, docs/demo/screenshots/data-explorer-02.png, docs/demo/screenshots/data-explorer-03.png, docs/demo/screenshots/data-explorer-04.png
+- data-journey: docs/demo/screenshots/data-journey-01.png, docs/demo/screenshots/data-journey-02.png, docs/demo/screenshots/data-journey-03.png, docs/demo/screenshots/data-journey-04.png
 - data-lifecycle: docs/demo/screenshots/data-lifecycle-01.png, docs/demo/screenshots/data-lifecycle-02.png
-- data-quality-lineage: docs/demo/screenshots/data-quality-lineage-01.png, docs/demo/screenshots/data-quality-lineage-02.png
-- demo-walkthrough: docs/demo/screenshots/demo-walkthrough-01.png
-- engagement-analysis: docs/demo/screenshots/engagement-analysis-01.png
-- excel-report-center: docs/demo/screenshots/excel-report-center-01.png, docs/demo/screenshots/excel-report-center-02.png
+- data-quality-lineage: docs/demo/screenshots/data-quality-lineage-01.png, docs/demo/screenshots/data-quality-lineage-02.png, docs/demo/screenshots/data-quality-lineage-03.png, docs/demo/screenshots/data-quality-lineage-04.png
+- demo-walkthrough: docs/demo/screenshots/demo-walkthrough-01.png, docs/demo/screenshots/demo-walkthrough-02.png, docs/demo/screenshots/demo-walkthrough-03.png, docs/demo/screenshots/demo-walkthrough-04.png
+- engagement-analysis: docs/demo/screenshots/engagement-analysis-01.png, docs/demo/screenshots/engagement-analysis-02.png, docs/demo/screenshots/engagement-analysis-03.png
+- excel-report-center: docs/demo/screenshots/excel-report-center-01.png, docs/demo/screenshots/excel-report-center-02.png, docs/demo/screenshots/excel-report-center-03.png
 - guided-pipeline: docs/demo/screenshots/guided-pipeline-01.png, docs/demo/screenshots/guided-pipeline-02.png
-- keyword-mining: docs/demo/screenshots/keyword-mining-01.png, docs/demo/screenshots/keyword-mining-02.png
-- overview: docs/demo/screenshots/overview-01.png, docs/demo/screenshots/overview-02.png
-- platform-comparison: docs/demo/screenshots/platform-comparison-01.png, docs/demo/screenshots/platform-comparison-02.png
+- keyword-mining: docs/demo/screenshots/keyword-mining-01.png, docs/demo/screenshots/keyword-mining-02.png, docs/demo/screenshots/keyword-mining-03.png, docs/demo/screenshots/keyword-mining-04.png
+- overview: docs/demo/screenshots/overview-01.png, docs/demo/screenshots/overview-02.png, docs/demo/screenshots/overview-03.png, docs/demo/screenshots/overview-04.png
+- platform-comparison: docs/demo/screenshots/platform-comparison-01.png, docs/demo/screenshots/platform-comparison-02.png, docs/demo/screenshots/platform-comparison-03.png
 - settings: docs/demo/screenshots/settings-01.png
-- source-registry: docs/demo/screenshots/source-registry-01.png
-- trend-analytics: docs/demo/screenshots/trend-analytics-01.png, docs/demo/screenshots/trend-analytics-02.png
+- source-registry: docs/demo/screenshots/source-registry-01.png, docs/demo/screenshots/source-registry-02.png, docs/demo/screenshots/source-registry-03.png
+- trend-analytics: docs/demo/screenshots/trend-analytics-01.png, docs/demo/screenshots/trend-analytics-02.png, docs/demo/screenshots/trend-analytics-03.png
 - assistant: docs/demo/screenshots/assistant-stage-overlay.png
 - guided upload: docs/demo/screenshots/guided-demo-after-upload.png
 - video: docs/demo/videos/full-guided-demo.webm
