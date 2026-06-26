@@ -11,7 +11,7 @@
 - demo-walkthrough: docs/demo/screenshots/demo-walkthrough-01.png, docs/demo/screenshots/demo-walkthrough-02.png, docs/demo/screenshots/demo-walkthrough-03.png, docs/demo/screenshots/demo-walkthrough-04.png
 - engagement-analysis: docs/demo/screenshots/engagement-analysis-01.png, docs/demo/screenshots/engagement-analysis-02.png, docs/demo/screenshots/engagement-analysis-03.png
 - excel-report-center: docs/demo/screenshots/excel-report-center-01.png, docs/demo/screenshots/excel-report-center-02.png, docs/demo/screenshots/excel-report-center-03.png
-- guided-pipeline: docs/demo/screenshots/guided-pipeline-01.png, docs/demo/screenshots/guided-pipeline-02.png
+- guided-pipeline: docs/demo/screenshots/guided-pipeline-01.png, docs/demo/screenshots/guided-pipeline-02.png, docs/demo/screenshots/guided-pipeline-03.png
 - keyword-mining: docs/demo/screenshots/keyword-mining-01.png, docs/demo/screenshots/keyword-mining-02.png, docs/demo/screenshots/keyword-mining-03.png, docs/demo/screenshots/keyword-mining-04.png
 - overview: docs/demo/screenshots/overview-01.png, docs/demo/screenshots/overview-02.png, docs/demo/screenshots/overview-03.png, docs/demo/screenshots/overview-04.png
 - platform-comparison: docs/demo/screenshots/platform-comparison-01.png, docs/demo/screenshots/platform-comparison-02.png, docs/demo/screenshots/platform-comparison-03.png

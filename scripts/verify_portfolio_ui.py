@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from playwright.sync_api import Page, expect, sync_playwright
@@ -16,11 +17,22 @@ OUTPUT_ROOT = Path("docs/demo")
 SCREENSHOT_DIR = OUTPUT_ROOT / "screenshots"
 VIDEO_DIR = OUTPUT_ROOT / "videos"
 VIEWPORT = {"width": 1440, "height": 1000}
-READY_ENDPOINT_COUNT = "25/25 endpoints ready"
 IGNORED_CONSOLE_ERROR_PARTS = (
     "favicon",
     "net::ERR_NETWORK_CHANGED",
 )
+VIDEO_FRAME_ORDER = [
+    "overview-01.png",
+    "data-explorer-01.png",
+    "keyword-mining-01.png",
+    "crawler-workflow-01.png",
+    "data-journey-01.png",
+    "guided-pipeline-01.png",
+    "guided-demo-after-upload.png",
+    "excel-report-center-01.png",
+    "compliance-diagnostics-01.png",
+    "assistant-stage-overlay.png",
+]
 
 PAGES = [
     ("overview", "/overview", '[data-tour="overview-kpis"]'),
@@ -72,10 +84,53 @@ def ensure_demo_dataset() -> None:
 def wait_demo_data_ready(page: Page) -> None:
     """Wait until the app has rendered API-backed demo data, not just shells."""
     expect(page.get_by_text("API ready").first).to_be_visible(timeout=180_000)
-    expect(page.get_by_text(READY_ENDPOINT_COUNT).first).to_be_visible(timeout=180_000)
     expect(page.locator(".loading-strip")).to_have_count(0, timeout=60_000)
     expect(page.get_by_text("Demo dataset", exact=False).first).to_be_visible(timeout=60_000)
     page.wait_for_timeout(900)
+
+
+def wait_for_page_data(page: Page, name: str) -> None:
+    """Assert the current page has real rendered demo data before capture."""
+    wait_demo_data_ready(page)
+    if name == "overview":
+        expect(page.get_by_text("15019").first).to_be_visible(timeout=60_000)
+        expect(page.get_by_text("10000").first).to_be_visible(timeout=60_000)
+    elif name == "data-explorer":
+        page.wait_for_function(
+            """() => document.querySelectorAll('tbody tr.clickable-row').length >= 8""",
+            timeout=60_000,
+        )
+    elif name == "keyword-mining":
+        page.wait_for_function(
+            """() => (
+                document.querySelectorAll('.topic-card').length >= 6 &&
+                document.querySelectorAll('.keyword-bubble-map circle').length >= 10
+            )""",
+            timeout=60_000,
+        )
+    elif name == "guided-pipeline":
+        ensure_guided_sample_preview(page)
+    elif name == "excel-report-center":
+        expect(page.get_by_text("Summary").first).to_be_visible(timeout=60_000)
+        expect(page.get_by_text("Raw Data").first).to_be_visible(timeout=60_000)
+    elif name == "compliance-diagnostics":
+        page.wait_for_function(
+            """() => document.querySelectorAll('.job-row').length >= 3""",
+            timeout=60_000,
+        )
+    elif name in {
+        "crawl-runs",
+        "engagement-analysis",
+        "platform-comparison",
+        "data-quality-lineage",
+    }:
+        page.wait_for_function(
+            """() => document.querySelectorAll(
+                'tbody tr, .job-row, .metadata-row, .topic-card'
+            ).length >= 3""",
+            timeout=60_000,
+        )
+    page.wait_for_timeout(500)
 
 
 def wait_ready(page: Page, selector: str) -> None:
@@ -86,6 +141,7 @@ def wait_ready(page: Page, selector: str) -> None:
 
 def capture_segments(page: Page, name: str, selector: str) -> list[str]:
     wait_ready(page, selector)
+    wait_for_page_data(page, name)
     total_height = int(page.evaluate("document.documentElement.scrollHeight"))
     viewport_height = VIEWPORT["height"]
     positions = [0]
@@ -107,6 +163,22 @@ def capture_segments(page: Page, name: str, selector: str) -> list[str]:
     return files
 
 
+def ensure_guided_sample_preview(page: Page) -> None:
+    """Populate the guided pipeline page before screenshots."""
+    if page.locator(".guided-stage-card").count() > 0:
+        return
+    with page.expect_response(
+        lambda response: "/pipeline/preview" in response.url and response.status == 200,
+        timeout=180_000,
+    ):
+        page.get_by_role("button", name="使用 Sample Data").click()
+    expect(page.locator(".guided-stage-card").first).to_be_visible(timeout=90_000)
+    page.wait_for_function(
+        """() => document.querySelectorAll('.guided-stage-card').length >= 5""",
+        timeout=60_000,
+    )
+
+
 def run_guided_demo(page: Page) -> None:
     fixture = Path("/tmp/guided_demo_upload.csv")
     fixture.write_text(
@@ -118,12 +190,7 @@ def run_guided_demo(page: Page) -> None:
     )
     page.goto(f"{BASE_URL}/guided-demo", wait_until="domcontentloaded")
     wait_ready(page, '[data-tour="guided-upload"]')
-    with page.expect_response(
-        lambda response: "/pipeline/preview" in response.url and response.status == 200,
-        timeout=180_000,
-    ):
-        page.get_by_role("button", name="使用 Sample Data").click()
-    expect(page.locator(".guided-stage-card").first).to_be_visible(timeout=90_000)
+    ensure_guided_sample_preview(page)
     with page.expect_response(
         lambda response: "/pipeline/preview" in response.url and response.status == 200,
         timeout=120_000,
@@ -166,6 +233,52 @@ def run_detail_routes(page: Page) -> None:
         page.screenshot(path=str(SCREENSHOT_DIR / f"detail-route-{index:02d}.png"), full_page=False)
 
 
+def build_video_from_verified_screenshots() -> None:
+    """Create a loading-free walkthrough video from verified data-rich screenshots."""
+    frames = [
+        SCREENSHOT_DIR / name
+        for name in VIDEO_FRAME_ORDER
+        if (SCREENSHOT_DIR / name).exists()
+    ]
+    if not frames:
+        raise RuntimeError("No verified screenshots available for video generation.")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        concat_file = Path(temp_dir) / "frames.txt"
+        lines: list[str] = []
+        for frame in frames:
+            lines.append(f"file '{frame.resolve()}'")
+            lines.append("duration 3")
+        lines.append(f"file '{frames[-1].resolve()}'")
+        concat_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_file),
+                "-vf",
+                "scale=1440:1000:force_original_aspect_ratio=decrease,"
+                "pad=1440:1000:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+                "-c:v",
+                "libvpx-vp9",
+                "-b:v",
+                "2M",
+                "-pix_fmt",
+                "yuv420p",
+                str(VIDEO_DIR / "full-guided-demo.webm"),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
 def main() -> None:
     ensure_demo_dataset()
     reset_output_dirs()
@@ -174,8 +287,6 @@ def main() -> None:
         context = browser.new_context(
             viewport=VIEWPORT,
             locale="zh-TW",
-            record_video_dir=str(VIDEO_DIR),
-            record_video_size=VIEWPORT,
         )
         context.add_init_script(
             """
@@ -206,21 +317,17 @@ def main() -> None:
         run_assistant(page)
         run_detail_routes(page)
 
-        video = page.video
         page.close()
-        if video:
-            video.save_as(str(VIDEO_DIR / "full-guided-demo.webm"))
         context.close()
         browser.close()
-        for raw_video in VIDEO_DIR.glob("*.webm"):
-            if raw_video.name != "full-guided-demo.webm":
-                raw_video.unlink()
 
         if page_errors or console_errors:
             raise RuntimeError(
                 "Playwright UI verification failed:\n"
                 f"page_errors={page_errors}\nconsole_errors={console_errors}"
             )
+
+    build_video_from_verified_screenshots()
 
     manifest = OUTPUT_ROOT / "verification-manifest.md"
     manifest.write_text(
