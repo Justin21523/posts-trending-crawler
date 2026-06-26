@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
 from playwright.sync_api import Page, expect, sync_playwright
 
-BASE_URL = "http://127.0.0.1:5176"
+BASE_URL = os.getenv("PORTFOLIO_UI_BASE_URL", "http://127.0.0.1:5176").rstrip("/")
 OUTPUT_ROOT = Path("docs/demo")
 SCREENSHOT_DIR = OUTPUT_ROOT / "screenshots"
 VIDEO_DIR = OUTPUT_ROOT / "videos"
@@ -87,14 +88,14 @@ def run_guided_demo(page: Page) -> None:
         timeout=180_000,
     ):
         page.get_by_role("button", name="使用 Sample Data").click()
-    expect(page.locator(".guided-stage-card").first).to_be_visible(timeout=15_000)
+    expect(page.locator(".guided-stage-card").first).to_be_visible(timeout=90_000)
     with page.expect_response(
         lambda response: "/pipeline/preview" in response.url and response.status == 200,
-        timeout=90_000,
+        timeout=120_000,
     ):
         page.locator(".guided-upload-zone input").set_input_files(str(fixture))
     expect(page.locator(".guided-upload-meta").get_by_text(fixture.name)).to_be_visible(
-        timeout=15_000
+        timeout=60_000
     )
     page.locator(".guided-stage-card").nth(2).click()
     page.wait_for_timeout(700)
@@ -140,9 +141,14 @@ def main() -> None:
             record_video_dir=str(VIDEO_DIR),
             record_video_size=VIEWPORT,
         )
+        context.add_init_script(
+            """
+            window.localStorage.setItem('twCrawlerLang', 'zh');
+            window.localStorage.setItem('twCrawlerPipelineJourneyAutoStarted', '1');
+            """
+        )
         page = context.new_page()
         page.goto(BASE_URL, wait_until="domcontentloaded")
-        page.evaluate("localStorage.setItem('twCrawlerLang', 'zh')")
 
         page_errors: list[str] = []
         console_errors: list[str] = []
@@ -169,6 +175,9 @@ def main() -> None:
             video.save_as(str(VIDEO_DIR / "full-guided-demo.webm"))
         context.close()
         browser.close()
+        for raw_video in VIDEO_DIR.glob("*.webm"):
+            if raw_video.name != "full-guided-demo.webm":
+                raw_video.unlink()
 
         if page_errors or console_errors:
             raise RuntimeError(

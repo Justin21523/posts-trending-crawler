@@ -255,14 +255,14 @@ and upload preview, report/detail routes, and fatal browser error detection.
 
 ```bash
 conda activate data_env
-dcard-crawler serve-api --host 127.0.0.1 --port 8001
+dcard-crawler serve-api --host 127.0.0.1 --port 8100
 
 cd frontend
-VITE_API_BASE_URL=http://127.0.0.1:8001 npm run dev -- --host 127.0.0.1 --port 5176
+VITE_API_BASE_URL=http://127.0.0.1:8100 npm run dev -- --host 127.0.0.1 --port 5189
 
 # From the project root, in another shell:
 conda activate data_env
-python scripts/verify_portfolio_ui.py
+PORTFOLIO_UI_BASE_URL=http://127.0.0.1:5189 python scripts/verify_portfolio_ui.py
 ```
 
 ## Architecture
